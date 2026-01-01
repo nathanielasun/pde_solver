@@ -28,11 +28,9 @@ the module boundaries, see `ARCHITECTURE.md`.
 
 ## Implementation Status
 
-- **Completed Phases**: See `COMPLETED_PHASES.md` for a consolidated summary of all completed work (Phase 1 and Phase 2 GUI improvements).
-- **Ongoing Work**: See `PENDING_UPDATES.md` for in-progress refactoring and partially-completed features.
-- **Proposed Work**: See `PROPOSED_PHASES.md` for all proposed tasks, organized for parallel agent assignment.
-- **High-Impact Extensions Plan**: See `HIGH_IMPACT_PLAN.md` for a detailed, phased roadmap to expand academic and personal project value.
-
+This is currently a work in progress. The following are in the process of implemenetation:
+1. Metal/CUDA-accelerated time-step solutions for time-dependent PDEs
+2. 
 ## BUILDING INSTRUCTIONS - FOLLOW CAREFULLY
 
 Navigate to be in the pde_solver directory and run the following in terminal
