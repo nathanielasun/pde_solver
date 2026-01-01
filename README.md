@@ -30,7 +30,10 @@ the module boundaries, see `ARCHITECTURE.md`.
 
 This is currently a work in progress. The following are in the process of implemenetation:
 1. Metal/CUDA-accelerated time-step solutions for time-dependent PDEs
-2. 
+2. Mixed partial derivative PDE term support - u_xy, u_yyx, etc
+3. Fixing metadata on PDE plot output saves
+4. Expanded GUI customization including panel spacing and width, and tab customizability
+   
 ## BUILDING INSTRUCTIONS - FOLLOW CAREFULLY
 
 Navigate to be in the pde_solver directory and run the following in terminal
