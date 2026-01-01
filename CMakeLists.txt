@@ -252,7 +252,6 @@ if(BUILD_GUI)
     third_party/imgui/misc/cpp
     third_party/glfw/include
   )
-  target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_LOADER_CUSTOM)
   target_compile_definitions(imgui PRIVATE GL_SILENCE_DEPRECATION)
 
   add_executable(pde_gui

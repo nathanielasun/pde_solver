@@ -2,14 +2,17 @@
 build/*
 !build/.gitkeep
 
+#ignore agents and claude files
+.claude/
+AGENTS.md
+CLAUDE.md
+
 #ignore the vtk and latex cache output directory
 outputs/*
 !outputs/.gitkeep
 
 #CONSTRUCTION FILES
 PDE_TERMS_AND_IMPLEMENTATION_PLAN.md
-AGENTS.md
-CLAUDE.md
 HIGH_IMPACT_PLAN.md
 COMPLETED_PHASES.md
 PDE_EXPANSION_PLAN.md
