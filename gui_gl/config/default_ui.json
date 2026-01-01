@@ -1,0 +1,377 @@
+{
+  "metadata": {
+    "schema_version": 1,
+    "component_version": 1,
+    "config_version": "1.0"
+  },
+  "theme": {
+    "name": "Dark",
+    "font_path": "",
+    "font_size": 13.0,
+    "input_width": 320.0,
+    "panel_spacing": 8.0,
+    "colors": {
+      "window_bg": "#262626",
+      "panel_bg": "#333333",
+      "input_bg": "#404040",
+      "text_color": "#FFFFFF",
+      "accent_primary": "#4299FF"
+    }
+  },
+  "panels": [
+    {
+      "id": "equation",
+      "name": "Equation",
+      "tab": "Main",
+      "order": 0,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["pde_input", "pde_preview", "pde_templates"]
+    },
+    {
+      "id": "domain",
+      "name": "Domain",
+      "tab": "Main",
+      "order": 1,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["coord_system", "bounds", "implicit_shape"]
+    },
+    {
+      "id": "grid",
+      "name": "Grid",
+      "tab": "Main",
+      "order": 2,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["grid_resolution"]
+    },
+    {
+      "id": "boundary",
+      "name": "Boundary Conditions",
+      "tab": "Main",
+      "order": 3,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["bc_inputs"]
+    },
+    {
+      "id": "compute",
+      "name": "Solver Configuration",
+      "tab": "Main",
+      "order": 4,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["backend", "solver_method", "solver_options"]
+    },
+    {
+      "id": "time",
+      "name": "Time",
+      "tab": "Main",
+      "order": 5,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["time_controls"]
+    },
+    {
+      "id": "run",
+      "name": "Run",
+      "tab": "Main",
+      "order": 6,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["run_controls"]
+    },
+    {
+      "id": "log",
+      "name": "Log",
+      "tab": "Main",
+      "order": 7,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["log_view"]
+    },
+    {
+      "id": "field_panel",
+      "name": "Field Selector",
+      "tab": "Inspect",
+      "order": 0,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["field_selector"]
+    },
+    {
+      "id": "slice_panel",
+      "name": "Slice Controls",
+      "tab": "Inspect",
+      "order": 1,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["slice_controls"]
+    },
+    {
+      "id": "iso_panel",
+      "name": "Isosurface Controls",
+      "tab": "Inspect",
+      "order": 2,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["isosurface_controls"]
+    },
+    {
+      "id": "export_panel",
+      "name": "Image Export",
+      "tab": "Inspect",
+      "order": 3,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["image_export"]
+    },
+    {
+      "id": "advanced_panel",
+      "name": "Advanced Inspection",
+      "tab": "Inspect",
+      "order": 4,
+      "collapsible": true,
+      "default_collapsed": true,
+      "components": ["advanced_inspection"]
+    },
+    {
+      "id": "comparison_panel",
+      "name": "Comparison Tools",
+      "tab": "Inspect",
+      "order": 5,
+      "collapsible": true,
+      "default_collapsed": true,
+      "components": ["comparison_tools"]
+    },
+    {
+      "id": "colors",
+      "name": "Appearance",
+      "tab": "Preferences",
+      "order": 0,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["color_preferences"]
+    },
+    {
+      "id": "viewer",
+      "name": "Viewer",
+      "tab": "Preferences",
+      "order": 1,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["viewer_controls"]
+    },
+    {
+      "id": "io",
+      "name": "I/O",
+      "tab": "Preferences",
+      "order": 2,
+      "collapsible": true,
+      "default_collapsed": false,
+      "components": ["io_paths"]
+    },
+    {
+      "id": "latex",
+      "name": "LaTeX Preview",
+      "tab": "Preferences",
+      "order": 3,
+      "collapsible": true,
+      "default_collapsed": true,
+      "components": ["latex_settings"]
+    },
+    {
+      "id": "benchmark",
+      "name": "Benchmarks",
+      "tab": "Preferences",
+      "order": 4,
+      "collapsible": true,
+      "default_collapsed": true,
+      "components": ["benchmark_controls"]
+    },
+    {
+      "id": "ui_config",
+      "name": "UI Configuration",
+      "tab": "Preferences",
+      "order": 5,
+      "collapsible": true,
+      "default_collapsed": true,
+      "components": ["ui_config_editor"]
+    }
+  ],
+  "components": {
+    "pde_input": {
+      "name": "PDE Input",
+      "type": "text_input",
+      "enabled": true,
+      "version": 1
+    },
+    "pde_preview": {
+      "name": "PDE Preview",
+      "type": "latex_preview",
+      "enabled": true,
+      "version": 1
+    },
+    "pde_templates": {
+      "name": "PDE Templates",
+      "type": "template_picker",
+      "enabled": true,
+      "version": 1
+    },
+    "coord_system": {
+      "name": "Coordinate System",
+      "type": "combo",
+      "enabled": true,
+      "version": 1
+    },
+    "bounds": {
+      "name": "Domain Bounds",
+      "type": "bounds_input",
+      "enabled": true,
+      "version": 1
+    },
+    "implicit_shape": {
+      "name": "Implicit Shape",
+      "type": "shape_input",
+      "enabled": true,
+      "version": 1
+    },
+    "grid_resolution": {
+      "name": "Grid Resolution",
+      "type": "int_input",
+      "enabled": true,
+      "version": 1
+    },
+    "bc_inputs": {
+      "name": "Boundary Condition Inputs",
+      "type": "bc_inputs",
+      "enabled": true,
+      "version": 1
+    },
+    "backend": {
+      "name": "Backend",
+      "type": "combo",
+      "enabled": true,
+      "version": 1
+    },
+    "solver_method": {
+      "name": "Solver Method",
+      "type": "combo",
+      "enabled": true,
+      "version": 1
+    },
+    "solver_options": {
+      "name": "Solver Options",
+      "type": "solver_options",
+      "enabled": true,
+      "version": 1
+    },
+    "time_controls": {
+      "name": "Time Controls",
+      "type": "time_controls",
+      "enabled": true,
+      "version": 1
+    },
+    "run_controls": {
+      "name": "Run Controls",
+      "type": "run_controls",
+      "enabled": true,
+      "version": 1
+    },
+    "log_view": {
+      "name": "Log View",
+      "type": "log_view",
+      "enabled": true,
+      "version": 1
+    },
+    "color_preferences": {
+      "name": "Color Preferences",
+      "type": "color_preferences",
+      "enabled": true,
+      "version": 1
+    },
+    "field_selector": {
+      "name": "Field Selector",
+      "type": "combo",
+      "enabled": true,
+      "version": 1
+    },
+    "slice_controls": {
+      "name": "Slice Controls",
+      "type": "slice_controls",
+      "enabled": true,
+      "version": 1
+    },
+    "isosurface_controls": {
+      "name": "Isosurface Controls",
+      "type": "isosurface_controls",
+      "enabled": true,
+      "version": 1
+    },
+    "image_export": {
+      "name": "Image Export",
+      "type": "image_export",
+      "enabled": true,
+      "version": 1
+    },
+    "advanced_inspection": {
+      "name": "Advanced Inspection",
+      "type": "inspection_tools",
+      "enabled": true,
+      "version": 1
+    },
+    "comparison_tools": {
+      "name": "Comparison Tools",
+      "type": "comparison_tools",
+      "enabled": true,
+      "version": 1
+    },
+    "viewer_controls": {
+      "name": "Viewer Controls",
+      "type": "viewer_controls",
+      "enabled": true,
+      "version": 1
+    },
+    "io_paths": {
+      "name": "I/O Paths",
+      "type": "io_paths",
+      "enabled": true,
+      "version": 1
+    },
+    "latex_settings": {
+      "name": "LaTeX Settings",
+      "type": "latex_settings",
+      "enabled": true,
+      "version": 1
+    },
+    "benchmark_controls": {
+      "name": "Benchmark Controls",
+      "type": "benchmark_controls",
+      "enabled": true,
+      "version": 1
+    },
+    "ui_config_editor": {
+      "name": "UI Config Editor",
+      "type": "ui_config_editor",
+      "enabled": true,
+      "version": 1
+    }
+  },
+  "feature_flags": {
+    "undo_redo": true,
+    "comparison_tools": true,
+    "inspection_tools": true,
+    "file_dialogs": true,
+    "image_export": true,
+    "latex_preview": true,
+    "ui_config_editor": true
+  },
+  "layout": {
+    "left_panel_min_width": 320.0,
+    "left_panel_max_width": 1200.0,
+    "right_panel_min_width": 320.0,
+    "splitter_width": 8.0
+  },
+  "tab_order": ["Main", "Inspect", "Preferences"]
+}

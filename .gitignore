@@ -1,0 +1,21 @@
+#ignore the build directory
+build/*
+!build/.gitkeep
+
+#ignore the vtk and latex cache output directory
+outputs/*
+!outputs/.gitkeep
+
+#CONSTRUCTION FILES
+PDE_TERMS_AND_IMPLEMENTATION_PLAN.md
+AGENTS.md
+CLAUDE.md
+HIGH_IMPACT_PLAN.md
+COMPLETED_PHASES.md
+PDE_EXPANSION_PLAN.md
+GUI_TEST_PANEL_PLAN.md 
+GUI_UX_IMPROVEMENTS.md
+GPU_MODULAR_SOLVERS.md
+GUI_TEST_PANEL_PLAN.md
+GPU_PARITY_PLAN.md
+
