@@ -1603,26 +1603,13 @@ void Application::SyncFontFromUIConfig() {
 }
 
 void Application::ForceApplyUISettings() {
-  // Force sync of layout settings
+  // Force sync of layout settings (safe to do mid-frame)
   SyncLayoutFromUIConfig();
 
-  // Force rebuild of fonts
-  const UIConfig& ui_cfg = ui_config_mgr_.GetConfig();
-  const float desired_size = std::max(kMinUIFontSize, std::min(kMaxUIFontSize, ui_cfg.theme.font_size));
-  const std::filesystem::path resolved_path = ResolveUIFontPath(ui_cfg.theme.font_path, ui_font_dir_);
-
-  std::string warning;
-  ApplyUIFont(resolved_path, desired_size, &warning);
-  ui_font_path_ = resolved_path;
-  ui_font_size_ = desired_size;
-
-  // Rebuild font atlas
-  ImGui_ImplOpenGL3_DestroyDeviceObjects();
-  ImGui_ImplOpenGL3_CreateDeviceObjects();
-
-  if (!warning.empty()) {
-    UIToast::Show(UIToast::Type::Warning, warning);
-  }
+  // Defer font rebuild to the start of the next frame.
+  // Rebuilding fonts mid-frame causes a crash because the current frame's
+  // font pointer becomes invalid while ImGui is still rendering.
+  pending_font_rebuild_ = true;
 }
 
 void Application::SavePreferencesIfNeeded() {
@@ -2718,8 +2705,31 @@ int Application::Run() {
 void Application::ProcessFrame() {
   window_manager_.PollEvents();
   solver_manager_.JoinIfFinished();
-  
+
   SyncLayoutFromUIConfig();
+
+  // Handle deferred font rebuild (requested by ForceApplyUISettings during previous frame)
+  // Must happen before ImGui::NewFrame() to avoid invalid font pointer crashes
+  if (pending_font_rebuild_) {
+    pending_font_rebuild_ = false;
+    const UIConfig& ui_cfg = ui_config_mgr_.GetConfig();
+    const float desired_size = std::max(kMinUIFontSize, std::min(kMaxUIFontSize, ui_cfg.theme.font_size));
+    const std::filesystem::path resolved_path = ResolveUIFontPath(ui_cfg.theme.font_path, ui_font_dir_);
+
+    std::string warning;
+    ApplyUIFont(resolved_path, desired_size, &warning);
+    ui_font_path_ = resolved_path;
+    ui_font_size_ = desired_size;
+
+    // Rebuild font atlas
+    ImGui_ImplOpenGL3_DestroyDeviceObjects();
+    ImGui_ImplOpenGL3_CreateDeviceObjects();
+
+    if (!warning.empty()) {
+      UIToast::Show(UIToast::Type::Warning, warning);
+    }
+  }
+
   SyncFontFromUIConfig();
 
   ImGui_ImplOpenGL3_NewFrame();
@@ -2736,14 +2746,14 @@ void Application::ProcessFrame() {
   
   // Render toast notifications
   UIToast::Render();
-  
-  ImGui::Render();
-  
-  // Help system modal
+
+  // Help system modal (must be before ImGui::Render())
   UIHelp::ShowHelpSearch();
-  
-  // Error dialog modal
+
+  // Error dialog modal (must be before ImGui::Render())
   error_dialog_.Render(shared_state_, state_mutex_);
+
+  ImGui::Render();
   
   // Handle solve results
   std::optional<SolveResult> result;

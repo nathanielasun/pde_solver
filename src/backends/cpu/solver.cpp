@@ -17,6 +17,7 @@
 #include "embedded_boundary.h"
 #include "expression_eval.h"
 #include "residual.h"
+#include "safe_math.h"
 #include "solvers/krylov.h"
 #include "solvers/multigrid.h"
 #include "solvers/relaxation.h"
@@ -355,6 +356,73 @@ bool BuildIntegralWeights3D(const SolveInput& input,
   }
   return true;
 }
+
+// Validate variable coefficients by sampling across the domain to detect
+// potential degenerate values before starting the solve
+struct CoefficientValidationResult {
+  bool ok = true;
+  std::string warning;  // Non-fatal warning about coefficient values
+};
+
+CoefficientValidationResult ValidateVariableCoefficients3D(
+    const CoefficientEvaluator& coeff_eval,
+    const Domain& d,
+    double dx, double dy, double dz,
+    double a, double b, double az, double e) {
+  CoefficientValidationResult result;
+  if (!coeff_eval.has_variable) {
+    return result;  // No variable coefficients to validate
+  }
+
+  const int nx = d.nx;
+  const int ny = d.ny;
+  const int nz = d.nz;
+
+  // Sample at a subset of interior points to avoid excessive computation
+  const int sample_stride = std::max(1, std::min({nx, ny, nz}) / 10);
+  int degenerate_count = 0;
+  int sample_count = 0;
+
+  for (int k = 1; k < nz - 1; k += sample_stride) {
+    const double z = d.zmin + k * dz;
+    for (int j = 1; j < ny - 1; j += sample_stride) {
+      const double y = d.ymin + j * dy;
+      for (int i = 1; i < nx - 1; i += sample_stride) {
+        const double x = d.xmin + i * dx;
+        ++sample_count;
+
+        // Evaluate coefficients at this point
+        const double a_val = EvalCoefficient(coeff_eval.a, a, x, y, z, 0.0);
+        const double b_val = EvalCoefficient(coeff_eval.b, b, x, y, z, 0.0);
+        const double az_val = EvalCoefficient(coeff_eval.az, az, x, y, z, 0.0);
+        const double e_val = EvalCoefficient(coeff_eval.e, e, x, y, z, 0.0);
+
+        // Compute center coefficient
+        const double ax = a_val / (dx * dx);
+        const double by = b_val / (dy * dy);
+        const double cz = az_val / (dz * dz);
+        const double center = -2.0 * ax - 2.0 * by - 2.0 * cz + e_val;
+
+        if (std::abs(center) < 1e-12) {
+          ++degenerate_count;
+        }
+      }
+    }
+  }
+
+  if (degenerate_count > 0) {
+    const double pct = 100.0 * static_cast<double>(degenerate_count) / static_cast<double>(sample_count);
+    result.warning = "variable coefficients produce near-zero center coefficient at " +
+                     std::to_string(degenerate_count) + "/" + std::to_string(sample_count) +
+                     " sampled points (" + std::to_string(static_cast<int>(pct)) + "%)";
+    // If more than 10% of points are degenerate, treat as error
+    if (pct > 10.0) {
+      result.ok = false;
+    }
+  }
+
+  return result;
+}
 } // namespace
 
 SolveOutput SolvePDE(const SolveInput& input, const ProgressCallback& progress) {
@@ -362,6 +430,19 @@ SolveOutput SolvePDE(const SolveInput& input, const ProgressCallback& progress) 
     return SolvePDETimeSeries(input, nullptr, progress);
   }
   const Domain& d = input.domain;
+
+  // Validate grid dimensions first to prevent division by zero
+  auto grid_check = pde::ValidateGridSize(d.nx, d.ny, d.nz);
+  if (!grid_check.ok) {
+    return {grid_check.error, {}};
+  }
+
+  // Validate domain bounds
+  auto domain_check = pde::ValidateDomainBounds(d.xmin, d.xmax, d.ymin, d.ymax, d.zmin, d.zmax);
+  if (!domain_check.ok) {
+    return {domain_check.error, {}};
+  }
+
   if (d.nz > 1) {
     return SolvePDE3D(input, progress);
   }
@@ -373,8 +454,14 @@ SolveOutput SolvePDE(const SolveInput& input, const ProgressCallback& progress) 
 
   const int nx = d.nx;
   const int ny = d.ny;
-  const double dx = (d.xmax - d.xmin) / static_cast<double>(nx - 1);
-  const double dy = (d.ymax - d.ymin) / static_cast<double>(ny - 1);
+
+  // Compute grid spacing with validation
+  auto spacing = pde::ComputeGridSpacing(d.xmin, d.xmax, nx, d.ymin, d.ymax, ny);
+  if (!spacing.ok) {
+    return {spacing.error, {}};
+  }
+  const double dx = spacing.dx;
+  const double dy = spacing.dy;
 
   std::vector<unsigned char> active;
   std::vector<CellBoundaryInfo> boundary_info;
@@ -507,6 +594,19 @@ SolveOutput SolvePDE(const SolveInput& input, const ProgressCallback& progress) 
 
 SolveOutput SolvePDE3D(const SolveInput& input, const ProgressCallback& progress) {
   const Domain& d = input.domain;
+
+  // Validate grid dimensions first to prevent division by zero
+  auto grid_check = pde::ValidateGridSize(d.nx, d.ny, d.nz);
+  if (!grid_check.ok) {
+    return {grid_check.error, {}};
+  }
+
+  // Validate domain bounds
+  auto domain_check = pde::ValidateDomainBounds(d.xmin, d.xmax, d.ymin, d.ymax, d.zmin, d.zmax);
+  if (!domain_check.ok) {
+    return {domain_check.error, {}};
+  }
+
   if (d.coord_system != CoordinateSystem::Cartesian) {
     return {"3D solver supports Cartesian coordinates only", {}};
   }
@@ -522,9 +622,15 @@ SolveOutput SolvePDE3D(const SolveInput& input, const ProgressCallback& progress
   const int nx = d.nx;
   const int ny = d.ny;
   const int nz = d.nz;
-  const double dx = (d.xmax - d.xmin) / static_cast<double>(nx - 1);
-  const double dy = (d.ymax - d.ymin) / static_cast<double>(ny - 1);
-  const double dz = (d.zmax - d.zmin) / static_cast<double>(nz - 1);
+
+  // Compute grid spacing with validation
+  auto spacing = pde::ComputeGridSpacing(d.xmin, d.xmax, nx, d.ymin, d.ymax, ny, d.zmin, d.zmax, nz);
+  if (!spacing.ok) {
+    return {spacing.error, {}};
+  }
+  const double dx = spacing.dx;
+  const double dy = spacing.dy;
+  const double dz = spacing.dz;
 
   std::vector<unsigned char> active;
   std::vector<CellBoundaryInfo> boundary_info;
@@ -578,6 +684,18 @@ SolveOutput SolvePDE3D(const SolveInput& input, const ProgressCallback& progress
       std::abs(a4) > 1e-12 || std::abs(b4) > 1e-12 || std::abs(az4) > 1e-12 ||
       !input.pde.a4_latex.empty() || !input.pde.b4_latex.empty() ||
       !input.pde.az4_latex.empty();
+
+  // Pre-validate variable coefficients to catch degenerate cases early
+  if (has_var_coeff) {
+    auto coeff_check = ValidateVariableCoefficients3D(coeff_eval, d, dx, dy, dz, a, b, az, e);
+    if (!coeff_check.ok) {
+      return {"variable coefficient validation failed: " + coeff_check.warning, {}};
+    }
+    // Log warning if non-fatal issues detected
+    if (!coeff_check.warning.empty() && progress) {
+      progress("coefficient_warning", 1.0);
+    }
+  }
 
   const bool has_rhs_expr = !input.pde.rhs_latex.empty();
   std::optional<ExpressionEvaluator> rhs_eval;
@@ -663,14 +781,19 @@ SolveOutput SolvePDE3D(const SolveInput& input, const ProgressCallback& progress
       }
     }
 
-    double integral_value = 0.0;
-    if (has_integrals) {
+    // Compute integral value BEFORE parallel section to ensure thread-safe read-only access
+    // The integral is computed once from the current grid state and used as a constant
+    // during this iteration. This must be computed serially before any parallel updates.
+    const double integral_value = [&]() -> double {
+      if (!has_integrals) return 0.0;
       const std::vector<unsigned char>* active_integral = use_shape ? active_ptr : nullptr;
-      integral_value = ComputeIntegralValue3D(grid, nx, ny, nz, active_integral, dx, dy, dz);
-    }
+      return ComputeIntegralValue3D(grid, nx, ny, nz, active_integral, dx, dy, dz);
+    }();
 
     double max_delta = 0.0;
     bool degenerate_error = false;
+    // Only Jacobi can be parallelized because it reads from grid and writes to next.
+    // GS/SOR update in-place and have data dependencies between cells.
     const bool can_parallelize = (input.solver.method == SolveMethod::Jacobi);
 #ifdef _OPENMP
     #pragma omp parallel for reduction(max:max_delta) reduction(||:degenerate_error) schedule(static) if(can_parallelize)
@@ -853,6 +976,13 @@ SolveOutput SolvePDE3D(const SolveInput& input, const ProgressCallback& progress
 
 SolveOutput SolvePDETimeSeries(const SolveInput& input, const FrameCallback& on_frame, const ProgressCallback& progress) {
   const Domain& d = input.domain;
+
+  // Validate grid dimensions first
+  auto grid_check = pde::ValidateGridSize(d.nx, d.ny, d.nz);
+  if (!grid_check.ok) {
+    return {grid_check.error, {}};
+  }
+
   if (d.nz > 1) {
     return SolvePDETimeSeries3D(input, on_frame, progress);
   }
@@ -862,16 +992,39 @@ SolveOutput SolvePDETimeSeries(const SolveInput& input, const FrameCallback& on_
 
   const int nx = d.nx;
   const int ny = d.ny;
-  const double dx = (d.xmax - d.xmin) / static_cast<double>(nx - 1);
-  const double dy = (d.ymax - d.ymin) / static_cast<double>(ny - 1);
+
+  // Compute grid spacing with validation
+  auto spacing = pde::ComputeGridSpacing(d.xmin, d.xmax, nx, d.ymin, d.ymax, ny);
+  if (!spacing.ok) {
+    return {spacing.error, {}};
+  }
+  const double dx = spacing.dx;
+  const double dy = spacing.dy;
+
   const int frames = std::max(1, input.time.frames);
   const double t_start = input.time.t_start;
   const double dt = input.time.dt;
+
+  // Validate dt is positive
+  if (dt <= 0.0) {
+    return {"time step dt must be positive", {}};
+  }
 
   const bool has_ut = std::abs(input.pde.ut) > 1e-12;
   const bool has_utt = std::abs(input.pde.utt) > 1e-12;
   if (!has_ut && !has_utt) {
     return {"time-dependent solve requires u_t or u_tt term", {}};
+  }
+
+  // CFL stability check for explicit time stepping
+  // For diffusion: dt < C * min(dx,dy)^2 / max_diffusion_coeff
+  // For advection: dt < C * min(dx,dy) / max_advection_coeff
+  const double max_diffusion = std::max(std::abs(input.pde.a), std::abs(input.pde.b));
+  const double max_advection = std::max(std::abs(input.pde.c), std::abs(input.pde.d));
+  auto cfl_check = pde::CheckCFL(dt, dx, dy, 0.0, max_diffusion, max_advection, 0.5);
+  if (!cfl_check.stable && progress) {
+    // Warn but don't fail - let user proceed at their own risk
+    progress("cfl_warning", cfl_check.max_dt);
   }
 
   std::vector<unsigned char> active;
@@ -1020,11 +1173,14 @@ SolveOutput SolvePDETimeSeries(const SolveInput& input, const FrameCallback& on_
                            eval_rhs(x, y, t) +
                            (has_nonlinear ? EvalNonlinear(input.nonlinear, grid[static_cast<size_t>(idx)]) : 0.0);
         if (has_utt) {
-          const double accel = -(rhs + input.pde.ut * velocity[static_cast<size_t>(idx)]) / input.pde.utt;
+          // Safe division for acceleration calculation
+          const double numer = -(rhs + input.pde.ut * velocity[static_cast<size_t>(idx)]);
+          const double accel = pde::SafeDivClamped(numer, input.pde.utt, 0.0);
           velocity[static_cast<size_t>(idx)] += dt * accel;
           next[static_cast<size_t>(idx)] = grid[static_cast<size_t>(idx)] + dt * velocity[static_cast<size_t>(idx)];
         } else {
-          const double u_t = -rhs / input.pde.ut;
+          // Safe division for time derivative calculation
+          const double u_t = pde::SafeDivClamped(-rhs, input.pde.ut, 0.0);
           next[static_cast<size_t>(idx)] = grid[static_cast<size_t>(idx)] + dt * u_t;
         }
       }

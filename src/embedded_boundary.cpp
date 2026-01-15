@@ -1,12 +1,16 @@
 #include "embedded_boundary.h"
 
 #include <cmath>
+#include <new>
 #include <optional>
 #include "expression_eval.h"
+#include "safe_math.h"
 #include "shape_utils.h"
 
 namespace {
 const double kEps = 1e-12;
+// Minimum distance for ghost value interpolation to avoid near-singular divisions
+const double kMinInterpolationDist = 1e-10;
 const double kBisectionTol = 1e-10;
 const int kBisectionMaxIter = 50;
 const double kNormalStep = 1e-6;
@@ -297,7 +301,16 @@ bool BuildEmbeddedBoundary2D(
   const double dx = (domain.xmax - domain.xmin) / static_cast<double>(nx - 1);
   const double dy = (domain.ymax - domain.ymin) / static_cast<double>(ny - 1);
 
-  boundary_info->resize(static_cast<size_t>(nx * ny));
+  // Handle potential memory allocation failure gracefully
+  try {
+    boundary_info->resize(static_cast<size_t>(nx * ny));
+  } catch (const std::bad_alloc&) {
+    if (error) {
+      *error = "failed to allocate memory for embedded boundary info (grid size: " +
+               std::to_string(nx) + "x" + std::to_string(ny) + ")";
+    }
+    return false;
+  }
 
   for (int j = 0; j < ny; ++j) {
     const double y = domain.ymin + j * dy;
@@ -403,7 +416,16 @@ bool BuildEmbeddedBoundary3D(
   const double dy = (domain.ymax - domain.ymin) / static_cast<double>(ny - 1);
   const double dz = (domain.zmax - domain.zmin) / static_cast<double>(nz - 1);
 
-  boundary_info->resize(static_cast<size_t>(nx * ny * nz));
+  // Handle potential memory allocation failure gracefully
+  try {
+    boundary_info->resize(static_cast<size_t>(nx * ny * nz));
+  } catch (const std::bad_alloc&) {
+    if (error) {
+      *error = "failed to allocate memory for 3D embedded boundary info (grid size: " +
+               std::to_string(nx) + "x" + std::to_string(ny) + "x" + std::to_string(nz) + ")";
+    }
+    return false;
+  }
 
   for (int k = 0; k < nz; ++k) {
     const double z = domain.zmin + k * dz;
@@ -577,14 +599,20 @@ void ApplyEmbeddedBoundaryBC2D(
       const double x_n = domain.xmin + i_neighbor * dx;
       const double y_n = domain.ymin + j_neighbor * dy;
       const double dist_neighbor = std::sqrt((x_b - x_n) * (x_b - x_n) + (y_b - y_n) * (y_b - y_n));
-      
+
       // Linear interpolation: u_b = (dist_to_boundary / total_dist) * u_neighbor + (dist_neighbor / total_dist) * u_ghost
       // Solving for u_ghost: u_ghost = (g * total_dist - dist_to_boundary * u_neighbor) / dist_neighbor
       const double total_dist = dist_to_boundary + dist_neighbor;
-      if (total_dist > kEps) {
-        const double u_ghost = (g * total_dist - dist_to_boundary * u_neighbor) / dist_neighbor;
-        (*grid)[static_cast<size_t>(idx)] = u_ghost;
+
+      // CRITICAL: Check both total_dist and dist_neighbor to avoid near-singular division
+      if (total_dist > kEps && dist_neighbor > kMinInterpolationDist) {
+        const double numer = g * total_dist - dist_to_boundary * u_neighbor;
+        const double u_ghost = pde::SafeDivClamped(numer, dist_neighbor, g);
+        // Clamp ghost value to prevent extreme extrapolation
+        const double max_ghost = std::max(std::abs(g), std::abs(u_neighbor)) * 10.0 + 1.0;
+        (*grid)[static_cast<size_t>(idx)] = pde::ClampToSafeRange(u_ghost, -max_ghost, max_ghost);
       } else {
+        // Distances too small for stable interpolation - use direct boundary value
         (*grid)[static_cast<size_t>(idx)] = g;
       }
     } else {
@@ -647,15 +675,19 @@ void ApplyEmbeddedBoundaryBC2D(
       const double x_n = domain.xmin + i_neighbor * dx;
       const double y_n = domain.ymin + j_neighbor * dy;
       const double dist = std::sqrt((x - x_n) * (x - x_n) + (y - y_n) * (y - y_n));
-      if (dist > kEps) {
+      if (dist > kMinInterpolationDist) {
         // α*u_b + β*(u_ghost - u_neighbor)/dist = γ
         // Approximate u_b ≈ (u_ghost + u_neighbor)/2
         // Solve: α*(u_ghost + u_neighbor)/2 + β*(u_ghost - u_neighbor)/dist = γ
         // u_ghost * (α/2 + β/dist) = γ - u_neighbor*(α/2 - β/dist)
-        const double coeff = alpha / 2.0 + beta / dist;
+        const double beta_over_dist = pde::SafeDivClamped(beta, dist, 0.0);
+        const double coeff = alpha / 2.0 + beta_over_dist;
         if (std::abs(coeff) > kEps) {
-          const double u_ghost = (gamma - u_neighbor * (alpha / 2.0 - beta / dist)) / coeff;
-          (*grid)[static_cast<size_t>(idx)] = u_ghost;
+          const double numer = gamma - u_neighbor * (alpha / 2.0 - beta_over_dist);
+          const double u_ghost = pde::SafeDivClamped(numer, coeff, u_neighbor);
+          // Clamp to prevent extreme values
+          const double max_val = std::max({std::abs(gamma), std::abs(u_neighbor), 1.0}) * 10.0;
+          (*grid)[static_cast<size_t>(idx)] = pde::ClampToSafeRange(u_ghost, -max_val, max_val);
         }
       }
     }

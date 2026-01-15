@@ -596,11 +596,20 @@ void ShowHelpPanel(const char* help_id) {
 }
 
 void ShowHelpSearch() {
+  // Track whether we've already opened the popup this session
+  // OpenPopup() should only be called once per popup session, not every frame
+  static bool popup_opened = false;
+
   if (!g_show_search) {
+    popup_opened = false;  // Reset when dialog is closed
     return;
   }
 
-  ImGui::OpenPopup("Help");
+  if (!popup_opened) {
+    ImGui::OpenPopup("Help");
+    popup_opened = true;
+  }
+
   if (ImGui::BeginPopupModal("Help", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::TextDisabled("Search help (F1)");
     ImGui::SetNextItemWidth(520.0f);
@@ -649,8 +658,7 @@ void ShowHelpSearch() {
 
 namespace UIIcon {
   void Text(const char* icon, const char* text, Size size) {
-    ImGui::PushFont(nullptr); // Use current font
-    float icon_size = static_cast<float>(size);
+    // No font push needed - uses current font by default
     ImGui::Text("%s", icon);
     ImGui::SameLine(0, UISpacing::XS);
     ImGui::Text("%s", text);

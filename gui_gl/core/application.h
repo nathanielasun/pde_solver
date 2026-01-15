@@ -240,6 +240,7 @@ class Application {
   std::filesystem::path ui_font_path_;
   std::filesystem::path ui_font_dir_;
   float ui_font_size_ = 0.0f;
+  bool pending_font_rebuild_ = false;  // Defer font rebuild to next frame start
 
   float left_panel_width_;
   bool left_collapsed_;

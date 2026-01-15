@@ -4,14 +4,17 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "safe_math.h"
 #include "string_utils.h"
 
 constexpr double kPi = 3.14159265358979323846;
+constexpr double kExpOverflowLimit = 700.0;  // exp(710) overflows double
 
 struct ExpressionEvaluator::Node {
   enum class Type {
@@ -402,6 +405,7 @@ class Parser {
   explicit Parser(std::vector<Token> tokens) : tokens_(std::move(tokens)) {}
 
   std::unique_ptr<Node> Parse(std::string* error) {
+    depth_ = 0;  // Reset depth counter
     auto expr = ParseExpression(error);
     if (!expr) {
       return nullptr;
@@ -416,6 +420,23 @@ class Parser {
   }
 
  private:
+  // RAII helper to track recursion depth
+  class DepthGuard {
+   public:
+    DepthGuard(int& depth, bool& overflow)
+        : depth_(depth), overflow_(overflow) {
+      ++depth_;
+      if (depth_ > pde::kMaxParserRecursionDepth) {
+        overflow_ = true;
+      }
+    }
+    ~DepthGuard() { --depth_; }
+    bool ok() const { return !overflow_; }
+   private:
+    int& depth_;
+    bool& overflow_;
+  };
+
   const Token& Peek() const { return tokens_[index_]; }
 
   const Token& Advance() {
@@ -440,6 +461,15 @@ class Parser {
   }
 
   std::unique_ptr<Node> ParseExpression(std::string* error) {
+    DepthGuard guard(depth_, depth_overflow_);
+    if (!guard.ok()) {
+      if (error) {
+        *error = "expression too deeply nested (max depth: " +
+                 std::to_string(pde::kMaxParserRecursionDepth) + ")";
+      }
+      return nullptr;
+    }
+
     auto left = ParseTerm(error);
     if (!left) {
       return nullptr;
@@ -473,6 +503,15 @@ class Parser {
   }
 
   std::unique_ptr<Node> ParseTerm(std::string* error) {
+    DepthGuard guard(depth_, depth_overflow_);
+    if (!guard.ok()) {
+      if (error && error->empty()) {
+        *error = "expression too deeply nested (max depth: " +
+                 std::to_string(pde::kMaxParserRecursionDepth) + ")";
+      }
+      return nullptr;
+    }
+
     auto left = ParsePower(error);
     if (!left) {
       return nullptr;
@@ -516,6 +555,15 @@ class Parser {
   }
 
   std::unique_ptr<Node> ParsePower(std::string* error) {
+    DepthGuard guard(depth_, depth_overflow_);
+    if (!guard.ok()) {
+      if (error && error->empty()) {
+        *error = "expression too deeply nested (max depth: " +
+                 std::to_string(pde::kMaxParserRecursionDepth) + ")";
+      }
+      return nullptr;
+    }
+
     auto left = ParseUnary(error);
     if (!left) {
       return nullptr;
@@ -535,6 +583,15 @@ class Parser {
   }
 
   std::unique_ptr<Node> ParseUnary(std::string* error) {
+    DepthGuard guard(depth_, depth_overflow_);
+    if (!guard.ok()) {
+      if (error && error->empty()) {
+        *error = "expression too deeply nested (max depth: " +
+                 std::to_string(pde::kMaxParserRecursionDepth) + ")";
+      }
+      return nullptr;
+    }
+
     if (Match(Token::Type::Plus)) {
       return ParseUnary(error);
     }
@@ -652,6 +709,8 @@ class Parser {
 
   std::vector<Token> tokens_;
   size_t index_ = 0;
+  int depth_ = 0;
+  bool depth_overflow_ = false;
 };
 }  // namespace
 
@@ -733,14 +792,31 @@ double ExpressionEvaluator::EvalNode(const Node* node, double x, double y, doubl
       return EvalNode(node->left.get(), x, y, z, t) * EvalNode(node->right.get(), x, y, z, t);
     case Node::Type::Div: {
       const double denom = EvalNode(node->right.get(), x, y, z, t);
-      if (std::abs(denom) < 1e-12) {
-        return 0.0;
+      if (std::abs(denom) < pde::kSafeDivEps) {
+        // Return NaN to signal numerical error rather than silently returning 0
+        return std::numeric_limits<double>::quiet_NaN();
       }
-      return EvalNode(node->left.get(), x, y, z, t) / denom;
+      const double result = EvalNode(node->left.get(), x, y, z, t) / denom;
+      // Check for overflow
+      if (!std::isfinite(result)) {
+        return std::numeric_limits<double>::quiet_NaN();
+      }
+      return result;
     }
-    case Node::Type::Pow:
-      return std::pow(EvalNode(node->left.get(), x, y, z, t),
-                      EvalNode(node->right.get(), x, y, z, t));
+    case Node::Type::Pow: {
+      const double base = EvalNode(node->left.get(), x, y, z, t);
+      const double exp = EvalNode(node->right.get(), x, y, z, t);
+      // Check for problematic cases
+      if (base < 0.0 && std::floor(exp) != exp) {
+        // Negative base with non-integer exponent
+        return std::numeric_limits<double>::quiet_NaN();
+      }
+      const double result = std::pow(base, exp);
+      if (!std::isfinite(result)) {
+        return std::numeric_limits<double>::quiet_NaN();
+      }
+      return result;
+    }
     case Node::Type::Neg:
       return -EvalNode(node->left.get(), x, y, z, t);
     case Node::Type::Func: {
@@ -752,16 +828,34 @@ double ExpressionEvaluator::EvalNode(const Node* node, double x, double y, doubl
         return std::cos(v);
       }
       if (node->func == "tan") {
+        // Check for singularities at odd multiples of pi/2
+        const double cos_v = std::cos(v);
+        if (std::abs(cos_v) < pde::kSafeDivEps) {
+          return std::numeric_limits<double>::quiet_NaN();
+        }
         return std::tan(v);
       }
       if (node->func == "exp") {
+        // Prevent overflow
+        if (v > kExpOverflowLimit) {
+          return std::numeric_limits<double>::infinity();
+        }
+        if (v < -kExpOverflowLimit) {
+          return 0.0;  // Underflow to zero is safe
+        }
         return std::exp(v);
       }
       if (node->func == "log") {
-        return std::log(std::max(1e-12, v));
+        if (v <= 0.0) {
+          return std::numeric_limits<double>::quiet_NaN();
+        }
+        return std::log(v);
       }
       if (node->func == "sqrt") {
-        return std::sqrt(std::max(0.0, v));
+        if (v < 0.0) {
+          return std::numeric_limits<double>::quiet_NaN();
+        }
+        return std::sqrt(v);
       }
       if (node->func == "abs") {
         return std::abs(v);
