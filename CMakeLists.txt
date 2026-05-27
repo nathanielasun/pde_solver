@@ -127,10 +127,20 @@ set(PDE_CORE_SOURCES
   src/backend_capability_matrix.cpp
   src/expression_eval.cpp
   src/coefficient_evaluator.cpp
+  src/nonlinear_derivatives.cpp
+  src/residual_operator.cpp
+  src/nonlinear_solve.cpp
+  src/newton_krylov.cpp
+  src/solve_status.cpp
+  src/fv/flux.cpp
+  src/fv/riemann.cpp
+  src/fv/hyperbolic_bc.cpp
+  src/fv/fv_discretization.cpp
   src/dataset_tools.cpp
   src/latex_lexer.cpp
   src/latex_ast.cpp
   src/latex_parser.cpp
+  src/latex_token_registry.cpp
   src/coupled_solver.cpp
   src/coupled_examples.cpp
   src/input_parse_domain.cpp
@@ -227,6 +237,95 @@ if(USE_OPENMP AND OpenMP_CXX_FOUND)
   target_link_libraries(regression_suite PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
+add_executable(burgers_fd_test tests/burgers_fd_test.cpp ${PDE_CORE_SOURCES})
+target_include_directories(burgers_fd_test PRIVATE include src/backends/cuda src/backends/metal)
+if(TARGET nlohmann_json::nlohmann_json)
+  target_link_libraries(burgers_fd_test PRIVATE nlohmann_json::nlohmann_json)
+elseif(TARGET nlohmann_json)
+  target_link_libraries(burgers_fd_test PRIVATE nlohmann_json)
+endif()
+if(USE_OPENMP AND OpenMP_CXX_FOUND)
+  target_link_libraries(burgers_fd_test PRIVATE OpenMP::OpenMP_CXX)
+endif()
+
+add_executable(shock_tube_test tests/shock_tube_test.cpp ${PDE_CORE_SOURCES})
+target_include_directories(shock_tube_test PRIVATE include src/backends/cuda src/backends/metal)
+if(TARGET nlohmann_json::nlohmann_json)
+  target_link_libraries(shock_tube_test PRIVATE nlohmann_json::nlohmann_json)
+elseif(TARGET nlohmann_json)
+  target_link_libraries(shock_tube_test PRIVATE nlohmann_json)
+endif()
+if(USE_OPENMP AND OpenMP_CXX_FOUND)
+  target_link_libraries(shock_tube_test PRIVATE OpenMP::OpenMP_CXX)
+endif()
+
+add_executable(reaction_diffusion_imex_test tests/reaction_diffusion_imex_test.cpp ${PDE_CORE_SOURCES})
+target_include_directories(reaction_diffusion_imex_test PRIVATE include src/backends/cuda src/backends/metal)
+if(TARGET nlohmann_json::nlohmann_json)
+  target_link_libraries(reaction_diffusion_imex_test PRIVATE nlohmann_json::nlohmann_json)
+elseif(TARGET nlohmann_json)
+  target_link_libraries(reaction_diffusion_imex_test PRIVATE nlohmann_json)
+endif()
+if(USE_OPENMP AND OpenMP_CXX_FOUND)
+  target_link_libraries(reaction_diffusion_imex_test PRIVATE OpenMP::OpenMP_CXX)
+endif()
+
+set(_microtex_submodule "${CMAKE_SOURCE_DIR}/third_party/MicroTeX/CMakeLists.txt")
+set(_microtex_deps_ok FALSE)
+if(EXISTS "${_microtex_submodule}")
+  find_package(PkgConfig QUIET)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(TINYXML2 QUIET tinyxml2)
+    if(TINYXML2_FOUND)
+      set(_microtex_deps_ok TRUE)
+    endif()
+  endif()
+endif()
+option(USE_MICROTEX_LATEX_PREVIEW "Use MicroTeX for in-process LaTeX preview" ${_microtex_deps_ok})
+if(USE_MICROTEX_LATEX_PREVIEW)
+  set(BUILD_RGBA ON CACHE BOOL "MicroTeX headless RGBA backend" FORCE)
+  set(QT OFF CACHE BOOL "" FORCE)
+  set(HAVE_LOG OFF CACHE BOOL "" FORCE)
+  add_subdirectory(third_party/MicroTeX EXCLUDE_FROM_ALL)
+  target_sources(LaTeX PRIVATE
+    ${CMAKE_SOURCE_DIR}/gui_gl/latex/microtex_rgba_graphic.cpp
+    ${CMAKE_SOURCE_DIR}/gui_gl/latex/preview_font_paths.cpp)
+  target_compile_definitions(LaTeX PRIVATE USE_MICROTEX_LATEX_PREVIEW)
+  target_include_directories(LaTeX PRIVATE
+    ${CMAKE_SOURCE_DIR}/third_party/imgui
+    ${CMAKE_SOURCE_DIR}/gui_gl)
+endif()
+
+add_executable(latex_token_export tools/latex_token_export.cpp src/latex_token_registry.cpp)
+target_include_directories(latex_token_export PRIVATE include)
+
+add_executable(latex_token_registry_test tests/latex_token_registry_test.cpp src/latex_token_registry.cpp)
+target_include_directories(latex_token_registry_test PRIVATE include)
+
+add_executable(latex_coefficient_parse_test tests/latex_coefficient_parse_test.cpp
+  src/latex_lexer.cpp src/latex_ast.cpp src/latex_parser.cpp src/latex_token_registry.cpp)
+target_include_directories(latex_coefficient_parse_test PRIVATE include)
+
+add_executable(latex_render_smoke_test tests/latex_render_smoke_test.cpp
+  gui_gl/latex/mathtext_bitmap_renderer.cpp
+  gui_gl/latex/microtex_imgui_painter.cpp
+  gui_gl/latex/preview_font_paths.cpp)
+target_include_directories(latex_render_smoke_test PRIVATE include gui_gl third_party/imgui)
+if(USE_MICROTEX_LATEX_PREVIEW)
+  target_sources(latex_render_smoke_test PRIVATE gui_gl/latex/microtex_rgba_graphic.cpp)
+  target_compile_definitions(latex_render_smoke_test PRIVATE USE_MICROTEX_LATEX_PREVIEW)
+  target_link_libraries(latex_render_smoke_test PRIVATE LaTeX)
+  target_include_directories(latex_render_smoke_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/third_party/MicroTeX/src)
+endif()
+
+add_custom_target(latex_token_docs
+  COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/generate_latex_token_docs.py
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  DEPENDS latex_token_export ${CMAKE_SOURCE_DIR}/tools/generate_latex_token_docs.py
+  COMMENT "Generate docs/reference/LATEX_TOKEN_REGISTRY.md"
+)
+
 option(BUILD_GUI "Build OpenGL GUI" ON)
 if(BUILD_GUI)
   set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -277,6 +376,11 @@ if(BUILD_GUI)
     gui_gl/templates.cpp
     gui_gl/app_state.cpp
     gui_gl/app_helpers.cpp
+    gui_gl/latex/mathtext_bitmap_renderer.cpp
+    gui_gl/latex/preview_font_paths.cpp
+    gui_gl/latex/microtex_imgui_painter.cpp
+    gui_gl/latex/latex_preview_draw.cpp
+    gui_gl/latex/latex_render_service.cpp
     gui_gl/components/ui_component.cpp
     gui_gl/components/log_panel.cpp
     gui_gl/components/inspection_tools.cpp
@@ -352,7 +456,21 @@ if(BUILD_GUI)
     PDE_BUILD_TIMESTAMP="${PDE_BUILD_TIMESTAMP}"
     PDE_BUILD_TYPE="$<CONFIG>"
   )
-  target_include_directories(pde_gui PRIVATE include gui_gl third_party/stb src/backends/cuda src/backends/metal)
+  target_include_directories(pde_gui PRIVATE include gui_gl third_party/stb third_party/imgui
+    src/backends/cuda src/backends/metal)
+
+  if(USE_MICROTEX_LATEX_PREVIEW)
+    target_compile_definitions(pde_gui PRIVATE USE_MICROTEX_LATEX_PREVIEW)
+    target_link_libraries(pde_gui PRIVATE LaTeX)
+    add_custom_command(TARGET pde_gui POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+              ${CMAKE_SOURCE_DIR}/third_party/MicroTeX/res
+              $<TARGET_FILE_DIR:pde_gui>/res
+      COMMENT "Copy MicroTeX resources next to pde_gui")
+    message(STATUS "MicroTeX LaTeX preview enabled for pde_gui")
+  elseif(EXISTS "${_microtex_submodule}")
+    message(STATUS "MicroTeX preview disabled: install tinyxml2 (brew install tinyxml2)")
+  endif()
   target_link_libraries(pde_gui PRIVATE imgui glfw OpenGL::GL)
   # Help debug runtime crashes (e.g., ImGui stack issues) with usable backtraces.
   target_compile_options(pde_gui PRIVATE -g -fno-omit-frame-pointer)

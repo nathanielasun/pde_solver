@@ -51,8 +51,17 @@ bool IsAllDirichlet(const BoundarySet& bc) {
            bc.bottom.kind == BCKind::Dirichlet && bc.top.kind == BCKind::Dirichlet;
 }
 
-double EvalExprHost(const BoundaryCondition::Expression& expr, double x, double y) {
-    return expr.constant + expr.x * x + expr.y * y + expr.z * 0.0;
+double EvalExprHost(const BoundaryCondition::Expression& expr, double x, double y, double z = 0.0, double t = 0.0) {
+    // Use ExpressionEvaluator for general expressions (stored in latex field)
+    if (!expr.latex.empty()) {
+        ExpressionEvaluator evaluator = ExpressionEvaluator::ParseLatex(expr.latex);
+        if (evaluator.ok()) {
+            const double v = evaluator.Eval(x, y, z, t);
+            if (std::isfinite(v)) return v;
+        }
+    }
+    // Fall back to linear expression
+    return expr.constant + expr.x * x + expr.y * y + expr.z * z;
 }
 
 bool BuildDirichletRhs(const Domain& d, const BoundarySet& bc, double f,

@@ -80,6 +80,8 @@ BackendCapabilities GetBackendCapabilities(BackendKind kind) {
       caps.supports_3d = true;
       caps.supports_spatial_rhs = true;
       caps.supports_nonlinear = true;
+      caps.supports_nonlinear_derivatives = true;
+      caps.supports_conservation_fv = true;
       caps.supports_integrals = true;
       caps.supports_shapes = true;
       caps.supports_time_dependent = true;
@@ -225,8 +227,16 @@ bool BackendSupportsInput(BackendKind kind, const SolveInput& input, std::string
     if (reason) *reason = "piecewise boundary conditions are not supported";
     return false;
   }
-  if (!input.nonlinear_derivatives.empty()) {
-    if (reason) *reason = "nonlinear derivative terms are not supported";
+  if (!input.nonlinear_derivatives.empty() && !caps.supports_nonlinear_derivatives) {
+    if (reason) *reason = "nonlinear derivative terms are not supported on this backend";
+    return false;
+  }
+  if (input.discretization == Discretization::FiniteVolume && !caps.supports_conservation_fv) {
+    if (reason) *reason = "finite-volume discretization is not supported on this backend";
+    return false;
+  }
+  if (input.problem_form == ProblemForm::ConservationLaw && !caps.supports_conservation_fv) {
+    if (reason) *reason = "conservation-law solves are not supported on this backend";
     return false;
   }
   return true;

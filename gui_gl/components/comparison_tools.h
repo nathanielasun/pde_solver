@@ -66,13 +66,23 @@ class ComparisonToolsComponent : public UIComponent {
   std::optional<Domain> current_domain_;
   std::optional<std::vector<double>> current_grid_;
   int time_step_mode_ = 0;  // 0 = file comparison, 1 = time step comparison
-  
+  std::vector<std::string> frame_paths_;
+  int current_frame_index_ = 0;
+  int comparison_frame_offset_ = -1;  // -1 = previous, +1 = next
+  int comparison_mode_ = 0;  // 0 = previous, 1 = next, 2 = specific
+  int specific_frame_index_ = 0;
+
   // Helper functions
   void UpdateComparison();
   void RenderFileComparison();
   void RenderTimeStepComparison();
   void RenderStatistics();
   std::string FormatNumber(double value, int precision = 6) const;
+
+ public:
+  // Set frame paths for time step comparison
+  void SetFramePaths(const std::vector<std::string>& paths);
+  void SetCurrentFrameIndex(int index) { current_frame_index_ = index; }
 };
 
 #endif  // COMPARISON_TOOLS_COMPONENT_H

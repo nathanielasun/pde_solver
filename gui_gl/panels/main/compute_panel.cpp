@@ -15,7 +15,7 @@
 namespace {
 
 std::vector<std::string> DefaultComponents() {
-  return {"backend", "solver_method", "solver_options"};
+  return {"backend", "discretization", "solver_method", "solver_options"};
 }
 
 BackendKind BackendKindFromName(const std::string& name) {
@@ -119,6 +119,15 @@ void RenderBackendSection(ComputePanelState& state) {
 
   if (current_backend == BackendKind::Auto) {
     ImGui::TextDisabled("Auto selects the best available backend at solve time.");
+  }
+}
+
+void RenderDiscretizationSection(ComputePanelState& state) {
+  ImGui::Text("Discretization");
+  const char* labels[] = {"Auto / FD", "Finite Volume"};
+  ImGui::SetNextItemWidth(state.input_width);
+  if (UIInput::Combo("##discretization", &state.discretization_index, labels, 2)) {
+    state.prefs_changed = true;
   }
 }
 
@@ -341,6 +350,8 @@ void RenderComputePanel(ComputePanelState& state, const std::vector<std::string>
     const std::string& id = component_list[i];
     if (id == "backend") {
       RenderBackendSection(state);
+    } else if (id == "discretization") {
+      RenderDiscretizationSection(state);
     } else if (id == "solver_method") {
       RenderSolverMethodSection(state, backend_provider);
     } else if (id == "solver_options") {

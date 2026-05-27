@@ -77,6 +77,29 @@ bool LatexParser::IsArgumentList(const std::string& text) {
   return true;
 }
 
+bool LatexParser::IsCoefficientExpression(const std::string& text) {
+  const std::string trimmed = Trim(text);
+  if (trimmed.empty()) {
+    return false;
+  }
+  if (trimmed == "u" || trimmed == "v" || trimmed == "w") {
+    return false;
+  }
+  if (trimmed == "u_x" || trimmed == "u_y" || trimmed == "u_z" || trimmed == "u_t" ||
+      trimmed == "u_xx" || trimmed == "u_yy" || trimmed == "u_zz" || trimmed == "u_tt") {
+    return false;
+  }
+  for (unsigned char ch : trimmed) {
+    const bool ok = std::isalnum(ch) != 0 || ch == '_' || ch == '^' || ch == '{' || ch == '}' ||
+                    ch == '\\' || ch == '+' || ch == '-' || ch == '*' || ch == '/' || ch == '.' ||
+                    ch == '(' || ch == ')' || ch == ',' || ch == ' ';
+    if (!ok) {
+      return false;
+    }
+  }
+  return true;
+}
+
 void LatexParser::StripTrailingArgumentList(std::string* text) {
   if (!text || text->empty()) {
     return;

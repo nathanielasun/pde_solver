@@ -1,5 +1,7 @@
 # PDE Expansion Plans (Options 1, 2, and 3)
 
+> **Note:** Active execution plan: [`MASTER_ROADMAP.md`](MASTER_ROADMAP.md). This file preserves original strategic intent.
+
 This document records an in-depth implementation plan for Option 1 and extended
 plans for Options 2 and 3. It is intended to be a continuity reference for
 future development and parallel agent work.

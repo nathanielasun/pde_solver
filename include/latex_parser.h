@@ -9,6 +9,9 @@
 struct LatexParseResult {
   bool ok = false;
   std::string error;
+  std::string source_latex;  // original equation text (for classification)
+  bool conservation_divergence = false;
+  std::string conservation_flux_latex;
   PDECoefficients coeffs;
   std::vector<IntegralTerm> integrals;
   std::vector<NonlinearTerm> nonlinear;
@@ -49,6 +52,7 @@ class LatexParser {
   // Utility methods used by multi-field parsing helpers
   static bool ParseNumber(const std::string& text, double* out_value);
   static bool IsArgumentList(const std::string& text);
+  static bool IsCoefficientExpression(const std::string& text);
   static std::string Trim(const std::string& input);
 
  private:

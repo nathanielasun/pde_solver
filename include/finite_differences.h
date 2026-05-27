@@ -97,7 +97,7 @@ inline double FourthDerivativeCenterCoeff(int index, int n, double h) {
   if (index <= 0 || index >= n - 1) {
     return inv_h4;
   }
-  if (index == n - 2) {
+  if (index == 1 || index == n - 2) {
     return -4.0 * inv_h4;
   }
   return 6.0 * inv_h4;

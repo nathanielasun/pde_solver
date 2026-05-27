@@ -123,20 +123,19 @@ void ApplicationState::SetSolverConfig(const SolverConfig& config) {
   NotifyObservers();
 }
 
-void ApplicationState::AddObserver(StateObserver observer) {
+ApplicationState::ObserverId ApplicationState::AddObserver(StateObserver observer) {
   std::lock_guard<std::mutex> lock(state_mutex_);
-  observers_.push_back(observer);
+  ObserverId id = next_observer_id_++;
+  observers_.push_back({id, std::move(observer)});
+  return id;
 }
 
-void ApplicationState::RemoveObserver(StateObserver observer) {
+void ApplicationState::RemoveObserver(ObserverId id) {
   std::lock_guard<std::mutex> lock(state_mutex_);
-  // Note: This is a simplified implementation. In production, you'd want
-  // to use a more sophisticated observer management system.
   observers_.erase(
     std::remove_if(observers_.begin(), observers_.end(),
-                   [&observer](const StateObserver& obs) {
-                     // Compare function pointers (simplified)
-                     return &obs == &observer;
+                   [id](const ObserverEntry& entry) {
+                     return entry.id == id;
                    }),
     observers_.end()
   );
@@ -283,9 +282,9 @@ void ApplicationState::NotifyObservers() const {
   }
   
   // Notify all observers (without holding the lock)
-  for (const auto& observer : observers_) {
-    if (observer) {
-      observer(current_state);
+  for (const auto& entry : observers_) {
+    if (entry.fn) {
+      entry.fn(current_state);
     }
   }
 }

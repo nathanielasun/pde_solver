@@ -29,8 +29,8 @@ const BackendStatus* FindStatus(const std::vector<BackendStatus>& statuses, Back
 
 void MaybeAttachResidualHistory(SolveOutput* out, std::vector<int>* iters,
                                 std::vector<double>* l2, std::vector<double>* linf) {
-  if (!out || (!iters->empty() && (l2->size() == iters->size()) &&
-               (linf->size() == iters->size()))) {
+  if (out && !iters->empty() && (l2->size() == iters->size()) &&
+      (linf->size() == iters->size())) {
     out->residual_iters = std::move(*iters);
     out->residual_l2_history = std::move(*l2);
     out->residual_linf_history = std::move(*linf);

@@ -20,6 +20,10 @@ void CPUBackendProvider::RenderOptionsUI() {
   ImGui::BulletText("3D domains: %s", caps.supports_3d ? "Supported" : "Not supported");
   ImGui::BulletText("Spatial RHS: %s", caps.supports_spatial_rhs ? "Supported" : "Not supported");
   ImGui::BulletText("Nonlinear terms: %s", caps.supports_nonlinear ? "Supported" : "Not supported");
+  ImGui::BulletText("Nonlinear derivatives: %s",
+                    caps.supports_nonlinear_derivatives ? "Supported" : "Not supported");
+  ImGui::BulletText("Conservation FV: %s",
+                    caps.supports_conservation_fv ? "Supported" : "Not supported");
   ImGui::BulletText("Integral terms: %s", caps.supports_integrals ? "Supported" : "Not supported");
 }
 
@@ -33,6 +37,10 @@ void CUDABackendProvider::RenderOptionsUI() {
   ImGui::BulletText("3D domains: %s", caps.supports_3d ? "Supported" : "Not supported");
   ImGui::BulletText("Spatial RHS: %s", caps.supports_spatial_rhs ? "Supported" : "Not supported");
   ImGui::BulletText("Nonlinear terms: %s", caps.supports_nonlinear ? "Supported" : "Not supported");
+  ImGui::BulletText("Nonlinear derivatives: %s",
+                    caps.supports_nonlinear_derivatives ? "CPU only" : "Not supported");
+  ImGui::BulletText("Conservation FV: %s",
+                    caps.supports_conservation_fv ? "CPU only" : "Not supported");
   ImGui::BulletText("Integral terms: %s", caps.supports_integrals ? "Supported" : "Not supported");
   ImGui::BulletText("Implicit shapes: %s", caps.supports_shapes ? "Supported" : "Not supported");
 }
@@ -56,6 +64,10 @@ void MetalBackendProvider::RenderOptionsUI() {
   ImGui::BulletText("3D domains: %s", caps.supports_3d ? "Supported" : "Not supported");
   ImGui::BulletText("Spatial RHS: %s", caps.supports_spatial_rhs ? "Supported" : "Not supported");
   ImGui::BulletText("Nonlinear terms: %s", caps.supports_nonlinear ? "Supported" : "Not supported");
+  ImGui::BulletText("Nonlinear derivatives: %s",
+                    caps.supports_nonlinear_derivatives ? "CPU only" : "Not supported");
+  ImGui::BulletText("Conservation FV: %s",
+                    caps.supports_conservation_fv ? "CPU only" : "Not supported");
   ImGui::BulletText("Integral terms: %s", caps.supports_integrals ? "Supported" : "Not supported");
   ImGui::BulletText("Implicit shapes: %s", caps.supports_shapes ? "Supported" : "Not supported");
 }

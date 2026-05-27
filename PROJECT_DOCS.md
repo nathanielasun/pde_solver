@@ -22,7 +22,7 @@ condensed module map, see `ARCHITECTURE.md`.
 - `src/self_test.cpp`: Self-test and regression suite harness used by `--self-test` and the `regression_suite` target.
 - `src/backend.cpp`: Backend selection and hardware detection for CPU/CUDA/Metal/TPU. Handles solver method dispatch and residual computation.
 - `include/backend.h`: Backend API declarations used by the CLI and solver.
-- `GPU_PARITY_PLAN.md`: Backend capability matrix and GPU parity priorities (Phase 7.1 kickoff).
+- `docs/planning/GPU_PARITY_PLAN.md`: Backend capability matrix and GPU parity priorities (Phase 7.1 kickoff).
 - `src/backends/cpu/solver.cpp`: CPU solver implementations (Jacobi, Gauss-Seidel, SOR, CG, BiCGStab, GMRES, Multigrid V-cycle). Supports 2D/3D, time-dependent, metric-corrected coordinate systems, embedded boundaries, spatial RHS/nonlinear terms, variable coefficients, and mixed/higher-order derivatives for Jacobi/Gauss-Seidel/SOR in Cartesian coordinates (5-point stencils require nx/ny/nz >= 5).
 - `src/coupled_solver.cpp`: Multi-field coupled PDE solver implementing explicit coupling (operator splitting) and Picard iteration (block Gauss-Seidel). Dispatches via `SolveCoupledPDE()` based on `CouplingStrategy`; includes under-relaxation, per-field residual tracking, and time-series support.
 - `include/coupled_solver.h`: Coupled solver interface with `SolveCoupledPDE()`, `SolveCoupledPDETimeSeries()`, `ComputeFieldChangeNorm()`, and `BuildSingleFieldInput()` for multi-field PDE systems.
@@ -75,7 +75,10 @@ condensed module map, see `ARCHITECTURE.md`.
 
 ## Tools and UI
 
-- `tools/render_latex.py`: Local LaTeX-to-PNG renderer used by the GUI.
+- `tools/render_latex.py`: Deprecated offline LaTeX-to-PNG helper (GUI uses in-process preview; see `docs/reference/LATEX_PREVIEW_ARCHITECTURE.md`).
+- `tools/generate_latex_token_docs.py`: Regenerates `docs/reference/LATEX_TOKEN_REGISTRY.md` from `latex_token_export`.
+- `include/latex_token_registry.h`, `src/latex_token_registry.cpp`: Authoritative LaTeX token catalog for docs and tooling.
+- `gui_gl/latex/`: Async LaTeX render service, CPU bitmap layout, GL texture upload.
 
 ## Tests
 
@@ -100,11 +103,14 @@ now lives in `gui_gl/`.
 - `gui_gl/core/event_handler.cpp`: Event handler implementation.
 - `gui_gl/app_state.h`: Application state management (solver state, UI state, viewer state).
 - `gui_gl/app_state.cpp`: Application state implementation.
-- `gui_gl/app_helpers.h`: Helper functions for GUI operations (solver invocation, file I/O, LaTeX rendering).
+- `gui_gl/app_helpers.h`: Helper functions for GUI operations (solver invocation, file I/O).
+- `gui_gl/latex/latex_render_service.h`: Non-blocking LaTeX preview queue and cache.
+- `gui_gl/latex/microtex_rgba_graphic.*`: MicroTeX RGBA graphics backend (fractions, functions, nested scripts).
+- **Build:** `cmake -DUSE_MICROTEX_LATEX_PREVIEW=ON` (default when `tinyxml2` is found). macOS: `brew install tinyxml2`. Copies `third_party/MicroTeX/res` beside `pde_gui`.
 - `gui_gl/app_helpers.cpp`: Application helper implementations.
 - `gui_gl/GlViewer.h`: OpenGL viewer API (view modes, grid, slice/isosurface filters).
 - `gui_gl/GlViewer.cpp`: OpenGL 3D point viewer with color gradient rendering to texture (~2252 lines, being refactored into rendering modules).
-- `gui_gl/stb_image_impl.cpp`: stb_image implementation for loading LaTeX PNG previews.
+- `gui_gl/stb_image_impl.cpp`: stb_image implementation (legacy PNG loading; previews use RGBA upload).
 - `gui_gl/validation.h`: Input validation for PDE, domain, and boundary conditions.
 - `gui_gl/validation.cpp`: Validation implementation.
 - `gui_gl/progress_feedback.h`: Progress feedback interface for solver callbacks.
@@ -192,7 +198,7 @@ The rendering subsystem has been extracted from `GlViewer.cpp` into focused modu
 - `gui_gl/rendering/value_sampling.h`: Value sampling utilities for inspection.
 - `gui_gl/rendering/value_sampling.cpp`: Value sampling implementation.
 
-**Note**: GlViewer.cpp integration with these modules is pending. See `PENDING_UPDATES.md` for status.
+**Note**: GlViewer.cpp integration with these modules is ongoing. See `docs/planning/MASTER_ROADMAP.md` Track 5 WP-5.4.
 
 ### Systems
 
@@ -269,22 +275,15 @@ UI work should target `gui_gl/` exclusively.
 - `AGENTS.md`: Contributor guidelines.
 - `CLAUDE.md`: Symlink to contributor guidelines.
 
-### Implementation Status
-- `COMPLETED_PHASES.md`: **Consolidated summary of all completed implementation phases** (Phase 1 and Phase 2).
-- `PROPOSED_PHASES.md`: **Consolidated summary of all proposed work, organized into separable tasks** for parallel agent assignment.
+### Planning (docs/planning/)
+- `docs/planning/README.md`: Index of planning documents.
+- `docs/planning/MASTER_ROADMAP.md`: **Single authoritative roadmap** — current state, priority tracks, work packages, acceptance criteria.
+- `docs/planning/COMPLETED_PHASES.md`: Log of completed GUI Phase 1–2 work.
+- `docs/planning/PDE_EXPANSION_PLANS.md`: Strategic Options 1–3 (FD, nonlinear/FV, FEM).
+- `docs/planning/PDE_TERMS_IMPLEMENTATION_PLAN.md`: Tiered PDE term implementation details.
+- `docs/planning/GPU_PARITY_PLAN.md`: GPU parity matrix and Phase 7.1 priorities.
+- `docs/planning/GUI_UX_IMPROVEMENTS.md`: Original GUI/UX recommendations.
+- `docs/planning/DOCKING_SYSTEM_PLAN.md`: Splittable docking UI design.
 
-### Detailed References
-- `PDE_TERMS_RECOMMENDATIONS.md`: Recommendations for PDE term usage and best practices.
-- `PDE_TERMS_IMPLEMENTATION_PLAN.md`: Detailed implementation plan for PDE term support.
-- `GUI_UX_IMPROVEMENTS.md`: Original GUI/UX improvement recommendations and specifications.
+### Architecture
 - `ARCHITECTURE.md`: High-level architectural overview and module boundaries.
-
-**Note**: Documentation has been consolidated:
-- **Completed work** → `COMPLETED_PHASES.md`
-- **Ongoing/partial work** → `PENDING_UPDATES.md`  
-- **Future work** → `PROPOSED_PHASES.md`
-- Individual phase/refactoring documents have been removed to reduce duplication.
-
-### Refactoring Status
-- Refactoring plans have been consolidated into `PENDING_UPDATES.md`
-- See `PENDING_UPDATES.md` for ongoing refactoring work and completion status

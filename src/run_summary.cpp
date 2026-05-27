@@ -9,7 +9,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include "residual_operator.h"
 #include "solver_tokens.h"
+#include "time_integrator.h"
 
 namespace {
 using json = nlohmann::json;
@@ -146,6 +148,30 @@ std::string BuildRunSummaryJson(const RunSummaryData& data, int indent) {
   }
   root["convergence"] = convergence;
 
+  if (!data.problem_form.empty() || !data.discretization.empty() || !data.integrator.empty() ||
+      data.newton_iterations >= 0 || data.cfl_max > 0.0 || !data.failure_reason.empty()) {
+    json nonlinear;
+    if (!data.problem_form.empty()) {
+      nonlinear["problem_form"] = data.problem_form;
+    }
+    if (!data.discretization.empty()) {
+      nonlinear["discretization"] = data.discretization;
+    }
+    if (!data.integrator.empty()) {
+      nonlinear["integrator"] = data.integrator;
+    }
+    if (data.newton_iterations >= 0) {
+      nonlinear["newton_iterations"] = data.newton_iterations;
+    }
+    if (data.cfl_max > 0.0) {
+      nonlinear["cfl_max"] = data.cfl_max;
+    }
+    if (!data.failure_reason.empty()) {
+      nonlinear["failure_reason"] = data.failure_reason;
+    }
+    root["nonlinear_pipeline"] = nonlinear;
+  }
+
   const bool has_monitor_history =
       !data.monitor_mass_history.empty() ||
       !data.monitor_energy_history.empty() ||
@@ -259,4 +285,13 @@ bool ReadRunSummarySidecar(const std::filesystem::path& output_path,
     return false;
   }
   return ReadFile(summary_path, summary_json, error);
+}
+
+void PopulateNonlinearPipelineSummary(const SolveInput& input, RunSummaryData* data) {
+  if (!data) {
+    return;
+  }
+  data->problem_form = ProblemFormToString(input.problem_form);
+  data->discretization = DiscretizationToString(input.discretization);
+  data->integrator = TimeIntegratorToString(input.time.integrator);
 }

@@ -6,6 +6,7 @@
 #include "backend.h"
 #include "pde_types.h"
 #include "input_parse.h"
+#include "panels/main/time_panel.h"
 #include "vtk_io.h"
 #include <string>
 #include <filesystem>
@@ -46,6 +47,8 @@ struct SolveHandlerState {
   int& metal_tg_x, &metal_tg_y;
   double& time_start, &time_end;
   int& time_frames;
+  int& discretization_index;
+  TimeIntegrationMethod& time_integration_method;
   std::string& output_path;
   
   // Shared state

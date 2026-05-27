@@ -1,7 +1,5 @@
 #include "solver_manager.h"
 #include "handlers/solve_handler.h"
-#include <fstream>
-#include <chrono>
 
 SolverManager::SolverManager(SharedState& state, std::mutex& state_mutex, GlViewer& viewer)
     : state_(state), state_mutex_(state_mutex), viewer_(viewer), cancel_requested_(false) {
@@ -12,35 +10,7 @@ SolverManager::~SolverManager() {
 }
 
 void SolverManager::StartSolver() {
-  // #region agent log
-  {
-    std::ofstream f("/Users/nathaniel.sun/Desktop/programming/cursor/.cursor/debug.log",
-                    std::ios::app);
-    if (f) {
-      const auto ts = std::chrono::duration_cast<std::chrono::milliseconds>(
-                          std::chrono::system_clock::now().time_since_epoch())
-                          .count();
-      f << "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\","
-           "\"location\":\"gui_gl/solver/solver_manager.cpp:StartSolver\",\"message\":\"Enter\","
-           "\"data\":{},\"timestamp\":" << ts << "}\n";
-    }
-  }
-  // #endregion agent log
   std::lock_guard<std::mutex> lock(state_mutex_);
-  // #region agent log
-  {
-    std::ofstream f("/Users/nathaniel.sun/Desktop/programming/cursor/.cursor/debug.log",
-                    std::ios::app);
-    if (f) {
-      const auto ts = std::chrono::duration_cast<std::chrono::milliseconds>(
-                          std::chrono::system_clock::now().time_since_epoch())
-                          .count();
-      f << "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\","
-           "\"location\":\"gui_gl/solver/solver_manager.cpp:StartSolver\",\"message\":\"LockAcquired\","
-           "\"data\":{},\"timestamp\":" << ts << "}\n";
-    }
-  }
-  // #endregion agent log
   if (state_.running) {
     return;
   }
@@ -82,21 +52,6 @@ void SolverManager::ReportStatus(const std::string& text) {
 }
 
 void SolverManager::LaunchSolve(SolveHandlerState& solve_state) {
-  // #region agent log
-  {
-    std::ofstream f("/Users/nathaniel.sun/Desktop/programming/cursor/.cursor/debug.log",
-                    std::ios::app);
-    if (f) {
-      const auto ts = std::chrono::duration_cast<std::chrono::milliseconds>(
-                          std::chrono::system_clock::now().time_since_epoch())
-                          .count();
-      f << "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\","
-           "\"location\":\"gui_gl/solver/solver_manager.cpp:LaunchSolve\",\"message\":\"Enter\","
-           "\"data\":{\"solver_thread_joinable\":" << (solver_thread_.joinable() ? "true" : "false")
-        << "},\"timestamp\":" << ts << "}\n";
-    }
-  }
-  // #endregion agent log
   // Join previous thread if still running
   if (solver_thread_.joinable()) {
     JoinIfFinished();

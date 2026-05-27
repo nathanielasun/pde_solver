@@ -93,6 +93,10 @@ static bool MatchTermForField(const std::string& term, const std::string& patter
     return true;
   }
 
+  if (LatexParser::IsCoefficientExpression(coeff_str)) {
+    return false;
+  }
+
   if (error) {
     *error = "invalid coefficient: " + coeff_str;
   }
@@ -168,6 +172,11 @@ bool LatexParser::ParseTerm(const std::string& term, PDECoefficients* coeffs,
         if (has_content) {
           looks_like_coeff = true;
         }
+      }
+
+      const std::string after_closed = Trim(after_paren.substr(matching_paren + 1));
+      if (!after_closed.empty() && after_closed.front() == '*') {
+        looks_like_coeff = false;
       }
       
       if (looks_like_coeff) {
@@ -269,6 +278,12 @@ bool LatexParser::ParseTerm(const std::string& term, PDECoefficients* coeffs,
     return true;
   }
 
+  const auto hasSecondOrderDeriv = [](const std::string& n) {
+    return n.find("u_xx") != std::string::npos || n.find("u_yy") != std::string::npos ||
+           n.find("u_zz") != std::string::npos || n.find("nabla^2") != std::string::npos ||
+           n.find("\\nabla^2") != std::string::npos || n.find("laplacian") != std::string::npos;
+  };
+
   std::string integral_error;
   if (ParseIntegralTerm(normalized, integrals, &integral_error)) {
     if (!integral_error.empty()) {
@@ -281,7 +296,8 @@ bool LatexParser::ParseTerm(const std::string& term, PDECoefficients* coeffs,
   }
 
   std::string nonlinear_error;
-  if (ParseNonlinearTerm(normalized, nonlinear, &nonlinear_error)) {
+  if (!hasSecondOrderDeriv(normalized) &&
+      ParseNonlinearTerm(normalized, nonlinear, &nonlinear_error)) {
     if (!nonlinear_error.empty()) {
       if (error) {
         *error = nonlinear_error;
@@ -292,7 +308,8 @@ bool LatexParser::ParseTerm(const std::string& term, PDECoefficients* coeffs,
   }
 
   std::string nonlinear_deriv_error;
-  if (ParseNonlinearDerivativeTerm(normalized, nonlinear_derivatives, &nonlinear_deriv_error)) {
+  if (!hasSecondOrderDeriv(normalized) &&
+      ParseNonlinearDerivativeTerm(normalized, nonlinear_derivatives, &nonlinear_deriv_error)) {
     if (!nonlinear_deriv_error.empty()) {
       if (error) {
         *error = nonlinear_deriv_error;
@@ -306,7 +323,7 @@ bool LatexParser::ParseTerm(const std::string& term, PDECoefficients* coeffs,
   // Returns the coefficient expression if found, empty string otherwise
   auto ExtractVarCoeff = [](const std::string& term, const std::string& pattern) -> std::string {
     std::string trimmed = Trim(term);
-    size_t pos = trimmed.find(pattern);
+    const size_t pos = trimmed.rfind(pattern);
     if (pos == std::string::npos) {
       return "";
     }
@@ -327,19 +344,11 @@ bool LatexParser::ParseTerm(const std::string& term, PDECoefficients* coeffs,
       return "";  // Numeric, not variable
     }
     
-    // If it contains parentheses, backslashes (LaTeX commands), or function names, it's likely variable
-    if (coeff_str.find('(') != std::string::npos || 
-        coeff_str.find('\\') != std::string::npos ||
-        coeff_str.find("sin") != std::string::npos ||
-        coeff_str.find("cos") != std::string::npos ||
-        coeff_str.find("exp") != std::string::npos ||
-        coeff_str.find("log") != std::string::npos ||
-        coeff_str.find("sqrt") != std::string::npos ||
-        coeff_str.find('^') != std::string::npos) {
-      return coeff_str;  // Variable coefficient expression
+    if (LatexParser::IsCoefficientExpression(coeff_str)) {
+      return coeff_str;
     }
-    
-    return "";  // Unknown format, treat as constant
+
+    return "";
   };
 
   double coeff = 0.0;
@@ -627,6 +636,14 @@ bool LatexParser::ParseTerm(const std::string& term, PDECoefficients* coeffs,
 
   double value = 0.0;
   if (!ParseNumber(normalized, &value)) {
+    if (!hasSecondOrderDeriv(normalized) && LatexParser::IsCoefficientExpression(normalized)) {
+      if (coeffs->rhs_latex.empty()) {
+        coeffs->rhs_latex = original;
+      } else {
+        coeffs->rhs_latex += " + " + original;
+      }
+      return true;
+    }
     if (error) {
       *error = "unsupported term: " + original;
     }

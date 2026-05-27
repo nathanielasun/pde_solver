@@ -19,6 +19,7 @@
 #include "../panels/preferences/benchmark_panel.h"
 #include "../panels/preferences/ui_config_panel.h"
 #include "../panels/main/time_panel.h"
+#include "../panels/main/source_term_panel.h"
 #include "../docking/docking_context.h"
 #include "../../include/run_config.h"
 #include <string>
@@ -181,6 +182,7 @@ class Application {
   int pref_metal_reduce_interval_, pref_metal_tg_x_, pref_metal_tg_y_;
   double time_start_, time_end_;
   int time_frames_;
+  int discretization_index_ = 0;
   TimeIntegrationMethod time_integration_method_ = TimeIntegrationMethod::ForwardEuler;
   TimeSteppingMode time_stepping_mode_ = TimeSteppingMode::Fixed;
   double time_cfl_target_ = 0.5;
@@ -229,6 +231,7 @@ class Application {
   // New panel state
   std::string initial_condition_expr_;
   std::string source_term_expr_;
+  std::vector<PointSource> point_sources_;
   std::string preset_directory_;
 
   // UI layout state
@@ -254,9 +257,6 @@ class Application {
   LatexTexture pde_preview_, shape_preview_;
   LatexTexture bc_left_preview_, bc_right_preview_, bc_bottom_preview_;
   LatexTexture bc_top_preview_, bc_front_preview_, bc_back_preview_;
-  std::string python_path_;
-  std::filesystem::path script_path_;
-  std::filesystem::path cache_dir_;
   std::string latex_color_;
   
   // Benchmark config

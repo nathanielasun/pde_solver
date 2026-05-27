@@ -25,6 +25,9 @@ void RenderComparisonToolsSection(ComparisonPanelState& state) {
     }
   }
 
+  comparison_component->SetFramePaths(state.frame_paths);
+  comparison_component->SetCurrentFrameIndex(state.frame_index);
+
   comparison_component->Render();
 }
 

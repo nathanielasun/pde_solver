@@ -2,10 +2,6 @@
 #include "app_helpers.h"
 #include "app_state.h"
 #include <filesystem>
-// #region agent log
-#include <fstream>
-#include <chrono>
-// #endregion agent log
 
 void LoadVtkFile(FileHandlerState& handler_state, const std::filesystem::path& path, bool fit_view) {
   VtkReadResult read_result = ReadVtkFile(path.string());
@@ -53,21 +49,6 @@ void LoadVtkFile(FileHandlerState& handler_state, const std::filesystem::path& p
     }
   }
   if (fit_view) {
-    // #region agent log
-    {
-      std::ofstream f("/Users/nathaniel.sun/Desktop/programming/cursor/.cursor/debug.log",
-                      std::ios::app);
-      if (f) {
-        const auto ts = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::chrono::system_clock::now().time_since_epoch())
-                            .count();
-        f << "{\"sessionId\":\"debug-session\",\"runId\":\"run9\",\"hypothesisId\":\"V\","
-             "\"location\":\"gui_gl/handlers/file_handler.cpp:LoadVtkFile\","
-             "\"message\":\"Calling viewer.FitToView from LoadVtkFile(fit_view=true)\","
-             "\"data\":{},\"timestamp\":" << ts << "}\n";
-      }
-    }
-    // #endregion agent log
     handler_state.viewer.FitToView();
     handler_state.point_scale = 1.0f;
   }

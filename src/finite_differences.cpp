@@ -309,14 +309,14 @@ double ComputeFourthDerivativeX(const double* grid, int i, int nx, double dx) {
   } else if (i == 1) {
     // Forward-biased stencil
     if (nx >= 5) {
-      return (grid[3] - 4.0 * grid[2] + 6.0 * grid[1] - 4.0 * grid[0] - grid[4]) * inv_dx4;
+      return (grid[4] - 4.0 * grid[3] + 6.0 * grid[2] - 4.0 * grid[1] + grid[0]) * inv_dx4;
     } else {
       return 0.0;
     }
   } else if (i == nx - 2) {
     // Backward-biased stencil
     if (nx >= 5) {
-      return (grid[nx - 1] - 4.0 * grid[nx - 2] + 6.0 * grid[nx - 3] - 4.0 * grid[nx - 4] - grid[nx - 5]) * inv_dx4;
+      return (grid[nx - 5] - 4.0 * grid[nx - 4] + 6.0 * grid[nx - 3] - 4.0 * grid[nx - 2] + grid[nx - 1]) * inv_dx4;
     } else {
       return 0.0;
     }
@@ -363,7 +363,7 @@ double ComputeFourthDerivativeY(const double* grid, int i, int j, int nx, int ny
       const int idx2 = Index2D(i, 2, nx);
       const int idx3 = Index2D(i, 3, nx);
       const int idx4 = Index2D(i, 4, nx);
-      return (grid[idx3] - 4.0 * grid[idx2] + 6.0 * grid[idx1] - 4.0 * grid[idx0] - grid[idx4]) * inv_dy4;
+      return (grid[idx4] - 4.0 * grid[idx3] + 6.0 * grid[idx2] - 4.0 * grid[idx1] + grid[idx0]) * inv_dy4;
     } else {
       return 0.0;
     }
@@ -375,7 +375,7 @@ double ComputeFourthDerivativeY(const double* grid, int i, int j, int nx, int ny
       const int idx_last3 = Index2D(i, ny - 3, nx);
       const int idx_last4 = Index2D(i, ny - 4, nx);
       const int idx_last5 = Index2D(i, ny - 5, nx);
-      return (grid[idx_last] - 4.0 * grid[idx_last2] + 6.0 * grid[idx_last3] - 4.0 * grid[idx_last4] - grid[idx_last5]) * inv_dy4;
+      return (grid[idx_last5] - 4.0 * grid[idx_last4] + 6.0 * grid[idx_last3] - 4.0 * grid[idx_last2] + grid[idx_last]) * inv_dy4;
     } else {
       return 0.0;
     }
@@ -427,7 +427,7 @@ double ComputeFourthDerivativeZ(const double* grid, int i, int j, int k, int nx,
       const int idx2 = Index3D(i, j, 2, nx, ny);
       const int idx3 = Index3D(i, j, 3, nx, ny);
       const int idx4 = Index3D(i, j, 4, nx, ny);
-      return (grid[idx3] - 4.0 * grid[idx2] + 6.0 * grid[idx1] - 4.0 * grid[idx0] - grid[idx4]) * inv_dz4;
+      return (grid[idx4] - 4.0 * grid[idx3] + 6.0 * grid[idx2] - 4.0 * grid[idx1] + grid[idx0]) * inv_dz4;
     } else {
       return 0.0;
     }
@@ -439,7 +439,7 @@ double ComputeFourthDerivativeZ(const double* grid, int i, int j, int k, int nx,
       const int idx_last3 = Index3D(i, j, nz - 3, nx, ny);
       const int idx_last4 = Index3D(i, j, nz - 4, nx, ny);
       const int idx_last5 = Index3D(i, j, nz - 5, nx, ny);
-      return (grid[idx_last] - 4.0 * grid[idx_last2] + 6.0 * grid[idx_last3] - 4.0 * grid[idx_last4] - grid[idx_last5]) * inv_dz4;
+      return (grid[idx_last5] - 4.0 * grid[idx_last4] + 6.0 * grid[idx_last3] - 4.0 * grid[idx_last2] + grid[idx_last]) * inv_dz4;
     } else {
       return 0.0;
     }

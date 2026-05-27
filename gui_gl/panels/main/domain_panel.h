@@ -65,9 +65,6 @@ struct DomainPanelState {
   LatexTexture& shape_preview;
   
   // LaTeX rendering settings
-  std::string& python_path;
-  std::filesystem::path& script_path;
-  std::filesystem::path& cache_dir;
   std::string& latex_color;
   int& latex_font_size;
   

@@ -3,6 +3,7 @@
 #include "vtk_io.h"
 #include "imgui.h"
 #include "imgui_stdlib.h"
+#include <algorithm>
 #include <sstream>
 #include <iomanip>
 #include <cmath>
@@ -96,13 +97,85 @@ void ComparisonToolsComponent::RenderTimeStepComparison() {
     ImGui::Text("Solve a time-dependent PDE to enable time step comparison.");
     return;
   }
-  
+
+  if (frame_paths_.empty()) {
+    ImGui::Text("No time series data available.");
+    ImGui::Text("Run a time-dependent solve to generate frames.");
+    return;
+  }
+
+  const int frameCount = static_cast<int>(frame_paths_.size());
+
   ImGui::Text("Time Step Comparison");
-  ImGui::Text("Compare current frame with previous/next frame.");
-  ImGui::Text("(Feature requires time series data)");
-  
-  // TODO: Implement time step comparison when time series support is added
-  ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Time step comparison coming soon...");
+  ImGui::Separator();
+  ImGui::Text("Current frame: %d / %d", current_frame_index_, frameCount - 1);
+  if (current_frame_index_ >= 0 && current_frame_index_ < frameCount) {
+    ImGui::TextWrapped("File: %s", frame_paths_[current_frame_index_].c_str());
+  }
+
+  ImGui::Spacing();
+  ImGui::Text("Compare with:");
+  ImGui::RadioButton("Previous Frame", &comparison_mode_, 0);
+  ImGui::SameLine();
+  ImGui::RadioButton("Next Frame", &comparison_mode_, 1);
+  ImGui::RadioButton("Specific Frame", &comparison_mode_, 2);
+
+  int targetFrame = -1;
+  if (comparison_mode_ == 0) {
+    targetFrame = current_frame_index_ - 1;
+    if (targetFrame < 0) {
+      ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f),
+                         "No previous frame (already at first frame).");
+    }
+  } else if (comparison_mode_ == 1) {
+    targetFrame = current_frame_index_ + 1;
+    if (targetFrame >= frameCount) {
+      ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f),
+                         "No next frame (already at last frame).");
+    }
+  } else {
+    ImGui::SetNextItemWidth(120);
+    ImGui::InputInt("Frame##specific", &specific_frame_index_);
+    specific_frame_index_ = std::clamp(specific_frame_index_, 0, frameCount - 1);
+    targetFrame = specific_frame_index_;
+    if (targetFrame == current_frame_index_) {
+      ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f),
+                         "Target frame is the same as current frame.");
+    }
+  }
+
+  ImGui::Spacing();
+
+  const bool canCompare = targetFrame >= 0 && targetFrame < frameCount &&
+                          targetFrame != current_frame_index_;
+
+  if (!canCompare) {
+    ImGui::BeginDisabled();
+  }
+  if (ImGui::Button("Compare", ImVec2(-1, 0))) {
+    // Load comparison frame from VTK file
+    VtkReadResult compResult = ReadVtkFile(frame_paths_[targetFrame]);
+    if (compResult.ok && compResult.kind == VtkReadResult::Kind::StructuredPoints) {
+      comparator_.SetSolutionA(current_domain_.value(), current_grid_.value());
+      comparator_.SetSolutionB(compResult.domain, compResult.grid);
+      UpdateComparison();
+    } else {
+      ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
+                         "Failed to load comparison frame.");
+    }
+  }
+  if (!canCompare) {
+    ImGui::EndDisabled();
+  }
+
+  if (comparator_.IsReady() && !comparator_.AreDomainsCompatible()) {
+    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Error: Domains not compatible");
+    ImGui::TextWrapped("Frames must have matching grid dimensions and coordinate systems.");
+  }
+}
+
+void ComparisonToolsComponent::SetFramePaths(const std::vector<std::string>& paths) {
+  frame_paths_ = paths;
 }
 
 void ComparisonToolsComponent::RenderStatistics() {
@@ -132,13 +205,17 @@ void ComparisonToolsComponent::RenderStatistics() {
   ImGui::Checkbox("Show Relative Error", &show_relative_error_);
   
   if (show_difference_ && !difference_field_.empty() && viewer_) {
-    // TODO: Set difference field in viewer
-    ImGui::Text("Difference field ready for visualization");
+    if (ImGui::Button("Display Difference Field", ImVec2(-1, 0))) {
+      Domain compDomain = comparator_.GetDomain();
+      viewer_->SetData(compDomain, difference_field_);
+    }
   }
-  
+
   if (show_relative_error_ && !relative_error_field_.empty() && viewer_) {
-    // TODO: Set relative error field in viewer
-    ImGui::Text("Relative error field ready for visualization");
+    if (ImGui::Button("Display Relative Error Field", ImVec2(-1, 0))) {
+      Domain compDomain = comparator_.GetDomain();
+      viewer_->SetData(compDomain, relative_error_field_);
+    }
   }
 }
 

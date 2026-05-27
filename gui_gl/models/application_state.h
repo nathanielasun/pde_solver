@@ -152,21 +152,24 @@ class ApplicationState {
   
   // Observer pattern
   using StateObserver = std::function<void(const State&)>;
-  void AddObserver(StateObserver observer);
-  void RemoveObserver(StateObserver observer);
-  
+  using ObserverId = int;
+  ObserverId AddObserver(StateObserver observer);
+  void RemoveObserver(ObserverId id);
+
   // Serialization
   bool SaveToFile(const std::filesystem::path& path) const;
   bool LoadFromFile(const std::filesystem::path& path);
-  
+
   // Convenience methods for common operations
   void NotifyStateChanged();
   void UpdateCoordinateFlags();  // Recompute coordinate flags from coord_mode
-  
+
  private:
   mutable std::mutex state_mutex_;
   State state_;
-  std::vector<StateObserver> observers_;
+  struct ObserverEntry { ObserverId id; StateObserver fn; };
+  std::vector<ObserverEntry> observers_;
+  ObserverId next_observer_id_ = 0;
   
   void NotifyObservers() const;
 };

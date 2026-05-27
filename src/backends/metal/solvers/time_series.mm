@@ -86,6 +86,7 @@ SolveOutput SolvePDETimeSeriesMetal(const SolveInput& input,
     const float by = static_cast<float>(input.pde.b / (dy * dy));
     const float cx = static_cast<float>(input.pde.c / (2.0 * dx));
     const float dyc = static_cast<float>(input.pde.d / (2.0 * dy));
+    const float center = -2.0f * ax - 2.0f * by + static_cast<float>(input.pde.e);
     const float f_const = static_cast<float>(input.pde.f);
     const float ut_coeff = static_cast<float>(input.pde.ut);
     const float utt_coeff = static_cast<float>(input.pde.utt);
@@ -347,10 +348,11 @@ SolveOutput SolvePDETimeSeriesMetal(const SolveInput& input,
                     [step_encoder setBytes:&by length:sizeof(float) atIndex:9];
                     [step_encoder setBytes:&cx length:sizeof(float) atIndex:10];
                     [step_encoder setBytes:&dyc length:sizeof(float) atIndex:11];
-                    [step_encoder setBytes:&f_const length:sizeof(float) atIndex:12];
-                    [step_encoder setBytes:&ut_coeff length:sizeof(float) atIndex:13];
-                    [step_encoder setBytes:&utt_coeff length:sizeof(float) atIndex:14];
-                    [step_encoder setBytes:&dt length:sizeof(float) atIndex:15];
+                    [step_encoder setBytes:&center length:sizeof(float) atIndex:12];
+                    [step_encoder setBytes:&f_const length:sizeof(float) atIndex:13];
+                    [step_encoder setBytes:&ut_coeff length:sizeof(float) atIndex:14];
+                    [step_encoder setBytes:&utt_coeff length:sizeof(float) atIndex:15];
+                    [step_encoder setBytes:&dt length:sizeof(float) atIndex:16];
                 } else {
                     [step_encoder setBuffer:domain_b offset:0 atIndex:2];
                     [step_encoder setBuffer:left_b offset:0 atIndex:3];
@@ -361,9 +363,10 @@ SolveOutput SolvePDETimeSeriesMetal(const SolveInput& input,
                     [step_encoder setBytes:&by length:sizeof(float) atIndex:8];
                     [step_encoder setBytes:&cx length:sizeof(float) atIndex:9];
                     [step_encoder setBytes:&dyc length:sizeof(float) atIndex:10];
-                    [step_encoder setBytes:&f_const length:sizeof(float) atIndex:11];
-                    [step_encoder setBytes:&ut_coeff length:sizeof(float) atIndex:12];
-                    [step_encoder setBytes:&dt length:sizeof(float) atIndex:13];
+                    [step_encoder setBytes:&center length:sizeof(float) atIndex:11];
+                    [step_encoder setBytes:&f_const length:sizeof(float) atIndex:12];
+                    [step_encoder setBytes:&ut_coeff length:sizeof(float) atIndex:13];
+                    [step_encoder setBytes:&dt length:sizeof(float) atIndex:14];
                 }
                 Dispatch2D(step_encoder, nx, ny, step_tg);
                 [step_encoder endEncoding];

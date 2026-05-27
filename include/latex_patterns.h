@@ -2,7 +2,8 @@
 #define LATEX_PATTERNS_H
 
 // Central registry of recognized LaTeX patterns for PDE term parsing.
-// Kept header-only (C++17 inline variables) to avoid additional compilation units.
+// Catalog metadata and documentation: include/latex_token_registry.h
+#include "latex_token_registry.h"
 
 namespace LatexPatterns {
 
@@ -12,6 +13,7 @@ inline constexpr const char* kD2XPatterns[] = {
     "\\partial_{xx}u",
     "\\partial_x\\partial_xu",
     "u_{xx}",
+    "u_xx",
     "\\partial^2u/\\partialx^2",
     "\\partial^2u/\\partialx\\partialx",
     "\\frac{d^2u}{dx^2}",

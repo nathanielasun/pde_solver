@@ -16,6 +16,9 @@ struct ComputePanelState {
   // Backend selection
   int& backend_index;
   
+  // Discretization (0=auto/FD, 1=FV)
+  int& discretization_index;
+
   // Solver method selection
   int& method_index;
   double& sor_omega;

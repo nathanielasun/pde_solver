@@ -69,103 +69,188 @@ void LoadThemePreset(int preset_index, ColorPreferences& colors) {
   }
 }
 
-// Apply color preferences to ImGui style
+// Apply color preferences to ImGui style - Modern 2025 Design
 void ApplyColorPreferences(const ColorPreferences& colors) {
   ImGuiStyle& style = ImGui::GetStyle();
-  
-  // Core colors
+
+  // ========== Core Background Colors ==========
   style.Colors[ImGuiCol_WindowBg] = colors.window_bg;
-  style.Colors[ImGuiCol_ChildBg] = colors.panel_bg;
+  style.Colors[ImGuiCol_ChildBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);  // Transparent children for seamless panels
+  style.Colors[ImGuiCol_PopupBg] = ImVec4(
+    colors.panel_bg.x * 1.05f,
+    colors.panel_bg.y * 1.05f,
+    colors.panel_bg.z * 1.05f,
+    0.98f  // Slight transparency for depth
+  );
+
+  // ========== Input/Frame Colors - Subtle inset look ==========
   style.Colors[ImGuiCol_FrameBg] = colors.input_bg;
   style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(
-    colors.input_bg.x * 1.1f,
-    colors.input_bg.y * 1.1f,
-    colors.input_bg.z * 1.1f,
+    colors.input_bg.x + 0.04f,
+    colors.input_bg.y + 0.04f,
+    colors.input_bg.z + 0.05f,
     colors.input_bg.w
   );
   style.Colors[ImGuiCol_FrameBgActive] = ImVec4(
-    colors.input_bg.x * 1.2f,
-    colors.input_bg.y * 1.2f,
-    colors.input_bg.z * 1.2f,
+    colors.input_bg.x + 0.06f,
+    colors.input_bg.y + 0.06f,
+    colors.input_bg.z + 0.08f,
     colors.input_bg.w
   );
+
+  // ========== Text Colors ==========
   style.Colors[ImGuiCol_Text] = colors.text_color;
   style.Colors[ImGuiCol_TextDisabled] = colors.text_disabled;
+  style.Colors[ImGuiCol_TextSelectedBg] = colors.selection_bg;
+
+  // ========== Borders - Very subtle ==========
   style.Colors[ImGuiCol_Border] = colors.border_color;
   style.Colors[ImGuiCol_BorderShadow] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-  
-  // Button colors (use accent)
+
+  // ========== Title Bar - Blend with window ==========
+  style.Colors[ImGuiCol_TitleBg] = colors.window_bg;
+  style.Colors[ImGuiCol_TitleBgActive] = ImVec4(
+    colors.panel_bg.x * 1.1f,
+    colors.panel_bg.y * 1.1f,
+    colors.panel_bg.z * 1.1f,
+    1.0f
+  );
+  style.Colors[ImGuiCol_TitleBgCollapsed] = colors.window_bg;
+  style.Colors[ImGuiCol_MenuBarBg] = colors.panel_bg;
+
+  // ========== Button Colors - Modern subtle accent ==========
   style.Colors[ImGuiCol_Button] = colors.accent_primary;
   style.Colors[ImGuiCol_ButtonHovered] = colors.accent_hover;
   style.Colors[ImGuiCol_ButtonActive] = colors.accent_active;
-  
-  // Header colors (collapsible sections)
+
+  // ========== Header Colors (TreeNode, CollapsingHeader) - Subtle highlight ==========
   style.Colors[ImGuiCol_Header] = ImVec4(
-    colors.accent_primary.x * 0.3f,
-    colors.accent_primary.y * 0.3f,
-    colors.accent_primary.z * 0.3f,
-    colors.accent_primary.w * 0.5f
+    colors.hover_bg.x, colors.hover_bg.y, colors.hover_bg.z, 0.5f
   );
   style.Colors[ImGuiCol_HeaderHovered] = ImVec4(
+    colors.hover_bg.x + 0.05f, colors.hover_bg.y + 0.05f, colors.hover_bg.z + 0.06f, 0.7f
+  );
+  style.Colors[ImGuiCol_HeaderActive] = ImVec4(
     colors.accent_primary.x * 0.4f,
     colors.accent_primary.y * 0.4f,
     colors.accent_primary.z * 0.4f,
-    colors.accent_primary.w * 0.6f
+    0.6f
   );
-  style.Colors[ImGuiCol_HeaderActive] = ImVec4(
-    colors.accent_primary.x * 0.5f,
-    colors.accent_primary.y * 0.5f,
-    colors.accent_primary.z * 0.5f,
-    colors.accent_primary.w * 0.7f
-  );
-  
-  // Tab colors
+
+  // ========== Tab Colors - Clean, minimal ==========
   style.Colors[ImGuiCol_Tab] = ImVec4(
-    colors.panel_bg.x * 0.8f,
-    colors.panel_bg.y * 0.8f,
-    colors.panel_bg.z * 0.8f,
-    colors.panel_bg.w
-  );
-  style.Colors[ImGuiCol_TabHovered] = ImVec4(
-    colors.accent_primary.x * 0.2f,
-    colors.accent_primary.y * 0.2f,
-    colors.accent_primary.z * 0.2f,
-    colors.accent_primary.w * 0.3f
-  );
-  style.Colors[ImGuiCol_TabActive] = colors.accent_primary;
-  
-  // Scrollbar colors
-  style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(
     colors.panel_bg.x * 0.9f,
     colors.panel_bg.y * 0.9f,
     colors.panel_bg.z * 0.9f,
-    colors.panel_bg.w
+    0.9f
   );
+  style.Colors[ImGuiCol_TabHovered] = ImVec4(
+    colors.accent_primary.x * 0.5f,
+    colors.accent_primary.y * 0.5f,
+    colors.accent_primary.z * 0.5f,
+    0.6f
+  );
+  style.Colors[ImGuiCol_TabSelected] = ImVec4(
+    colors.accent_primary.x * 0.35f,
+    colors.accent_primary.y * 0.35f,
+    colors.accent_primary.z * 0.35f,
+    1.0f
+  );
+  style.Colors[ImGuiCol_TabSelectedOverline] = colors.accent_primary;
+  style.Colors[ImGuiCol_TabDimmed] = ImVec4(
+    colors.panel_bg.x * 0.7f,
+    colors.panel_bg.y * 0.7f,
+    colors.panel_bg.z * 0.7f,
+    0.8f
+  );
+  style.Colors[ImGuiCol_TabDimmedSelected] = ImVec4(
+    colors.panel_bg.x * 0.85f,
+    colors.panel_bg.y * 0.85f,
+    colors.panel_bg.z * 0.85f,
+    1.0f
+  );
+
+  // ========== Scrollbar - Slim, subtle ==========
+  style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);  // Transparent
   style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(
-    colors.border_color.x,
-    colors.border_color.y,
-    colors.border_color.z,
-    colors.border_color.w * 0.8f
+    colors.border_color.x + 0.1f,
+    colors.border_color.y + 0.1f,
+    colors.border_color.z + 0.12f,
+    0.5f
   );
-  style.Colors[ImGuiCol_ScrollbarGrabHovered] = colors.accent_primary;
-  style.Colors[ImGuiCol_ScrollbarGrabActive] = colors.accent_active;
-  
-  // Slider colors
-  style.Colors[ImGuiCol_SliderGrab] = colors.accent_primary;
-  style.Colors[ImGuiCol_SliderGrabActive] = colors.accent_active;
-  
-  // Checkbox/Radio colors
+  style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(
+    colors.border_color.x + 0.15f,
+    colors.border_color.y + 0.15f,
+    colors.border_color.z + 0.18f,
+    0.7f
+  );
+  style.Colors[ImGuiCol_ScrollbarGrabActive] = colors.accent_primary;
+
+  // ========== Slider/Grab Elements ==========
+  style.Colors[ImGuiCol_SliderGrab] = ImVec4(
+    colors.accent_primary.x * 0.8f,
+    colors.accent_primary.y * 0.8f,
+    colors.accent_primary.z * 0.8f,
+    1.0f
+  );
+  style.Colors[ImGuiCol_SliderGrabActive] = colors.accent_primary;
+
+  // ========== Checkbox/Radio ==========
   style.Colors[ImGuiCol_CheckMark] = colors.accent_primary;
-  
-  // Plot colors
+
+  // ========== Separator - Subtle divider ==========
+  style.Colors[ImGuiCol_Separator] = ImVec4(
+    colors.border_color.x, colors.border_color.y, colors.border_color.z, 0.4f
+  );
+  style.Colors[ImGuiCol_SeparatorHovered] = colors.accent_hover;
+  style.Colors[ImGuiCol_SeparatorActive] = colors.accent_primary;
+
+  // ========== Resize Grip ==========
+  style.Colors[ImGuiCol_ResizeGrip] = ImVec4(
+    colors.accent_primary.x, colors.accent_primary.y, colors.accent_primary.z, 0.2f
+  );
+  style.Colors[ImGuiCol_ResizeGripHovered] = ImVec4(
+    colors.accent_primary.x, colors.accent_primary.y, colors.accent_primary.z, 0.5f
+  );
+  style.Colors[ImGuiCol_ResizeGripActive] = colors.accent_primary;
+
+  // ========== Plot Colors ==========
   style.Colors[ImGuiCol_PlotLines] = colors.accent_primary;
   style.Colors[ImGuiCol_PlotLinesHovered] = colors.accent_hover;
-  style.Colors[ImGuiCol_PlotHistogram] = colors.accent_primary;
+  style.Colors[ImGuiCol_PlotHistogram] = ImVec4(
+    colors.accent_primary.x * 0.9f,
+    colors.accent_primary.y * 0.9f,
+    colors.accent_primary.z * 0.9f,
+    0.8f
+  );
   style.Colors[ImGuiCol_PlotHistogramHovered] = colors.accent_hover;
-  
-  // Popup colors
-  style.Colors[ImGuiCol_PopupBg] = colors.panel_bg;
-  style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.6f);
+
+  // ========== Table Colors ==========
+  style.Colors[ImGuiCol_TableHeaderBg] = ImVec4(
+    colors.panel_bg.x * 1.1f,
+    colors.panel_bg.y * 1.1f,
+    colors.panel_bg.z * 1.1f,
+    1.0f
+  );
+  style.Colors[ImGuiCol_TableBorderStrong] = colors.border_color;
+  style.Colors[ImGuiCol_TableBorderLight] = ImVec4(
+    colors.border_color.x, colors.border_color.y, colors.border_color.z, 0.3f
+  );
+  style.Colors[ImGuiCol_TableRowBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+  style.Colors[ImGuiCol_TableRowBgAlt] = ImVec4(
+    colors.panel_bg.x * 0.95f,
+    colors.panel_bg.y * 0.95f,
+    colors.panel_bg.z * 0.95f,
+    0.3f
+  );
+
+  // ========== Navigation/Selection ==========
+  style.Colors[ImGuiCol_NavHighlight] = colors.accent_primary;
+  style.Colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.0f, 1.0f, 1.0f, 0.7f);
+  style.Colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.2f);
+
+  // ========== Modal Overlay ==========
+  style.Colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.55f);  // Softer dim
 }
 
 // Render the color preferences panel

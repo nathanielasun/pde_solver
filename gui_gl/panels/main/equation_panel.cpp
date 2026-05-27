@@ -5,14 +5,13 @@
 
 #include "templates.h"
 #include "app_helpers.h"
+#include "latex/latex_preview_draw.h"
+#include "latex/latex_render_service.h"
 #include "styles/ui_style.h"
 #include "ui_helpers.h"
+#include "latex_parser.h"
 
 #include <algorithm>
-// #region agent log
-#include <fstream>
-#include <chrono>
-// #endregion agent log
 
 namespace {
 
@@ -32,16 +31,37 @@ void RenderPdeInput(EquationPanelState& state) {
   }
 }
 
+void RenderParseBadge(const std::string& pde_text, int coord_mode) {
+  LatexParser parser;
+  const LatexParseResult result = parser.Parse(pde_text);
+  if (pde_text.empty()) {
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.65f, 1.0f), "Parse: (empty)");
+    return;
+  }
+  (void)coord_mode;
+  if (result.ok) {
+    ImGui::TextColored(ImVec4(0.35f, 0.9f, 0.45f, 1.0f), "Parse: OK");
+  } else {
+    ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), "Parse: %s", result.error.c_str());
+  }
+}
+
 void RenderPdePreview(EquationPanelState& state) {
-  if (state.pde_preview.dirty || state.pde_preview.last_rendered != state.pde_text) {
-    UpdateLatexTexture(state.pde_preview, state.pde_text,
-                       state.python_path, state.script_path, state.cache_dir,
-                       state.latex_color, state.latex_font_size);
+  if (state.pde_preview.dirty || state.pde_preview.last_rendered != state.pde_text ||
+      state.pde_preview.pending) {
+    UpdateLatexTexture(state.pde_preview, state.pde_text, state.latex_color,
+                       state.latex_font_size);
   }
 
-  if (!state.pde_preview.error.empty()) {
-    ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Preview error: %s",
-                       state.pde_preview.error.c_str());
+  RenderParseBadge(state.pde_text, state.coord_mode);
+
+  if (state.pde_preview.pending) {
+    ImGui::TextColored(ImVec4(0.7f, 0.75f, 0.85f, 1.0f), "Rendering preview...");
+  } else if (!state.pde_preview.error.empty() || state.pde_preview.texture == 0) {
+    LatexParser parser;
+    const LatexParseResult result = parser.Parse(state.pde_text);
+  DrawLatexPreviewError(state.pde_preview, result.ok ? std::string() : result.error, result.ok,
+                        state.input_width);
   } else {
     DrawLatexPreview(state.pde_preview, state.input_width, 140.0f);
   }
@@ -92,21 +112,6 @@ void RenderTemplates(EquationPanelState& state) {
 
       state.pde_preview.dirty = true;
       state.refresh_coord_flags();
-      // #region agent log
-      {
-        std::ofstream f("/Users/nathaniel.sun/Desktop/programming/cursor/.cursor/debug.log",
-                        std::ios::app);
-        if (f) {
-          const auto ts = std::chrono::duration_cast<std::chrono::milliseconds>(
-                              std::chrono::system_clock::now().time_since_epoch())
-                              .count();
-          f << "{\"sessionId\":\"debug-session\",\"runId\":\"run9\",\"hypothesisId\":\"U\","
-               "\"location\":\"gui_gl/panels/equation_panel.cpp:RenderTemplates\","
-               "\"message\":\"Calling viewer.FitToView from Apply template\","
-               "\"data\":{},\"timestamp\":" << ts << "}\n";
-        }
-      }
-      // #endregion agent log
       state.viewer.FitToView();
     }
   }

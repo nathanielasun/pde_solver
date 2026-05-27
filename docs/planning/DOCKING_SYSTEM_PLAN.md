@@ -1,5 +1,7 @@
 # Splittable Window & Docking System Implementation Plan
 
+> **Note:** Active execution plan: [`MASTER_ROADMAP.md`](MASTER_ROADMAP.md) Track 4.
+
 ## Overview
 
 This document outlines the implementation plan for transforming the current fixed-layout UI into a VS Code/Blender-style splittable, draggable, and customizable window system.

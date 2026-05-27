@@ -17,73 +17,87 @@
 
 namespace UIButton {
   static int style_stack_depth = 0;
-  
+
   void PushStyle(Size size, Variant variant) {
-    ImGuiStyle& style = ImGui::GetStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(
-      UISpacing::ButtonPaddingX,
-      size == Size::Small ? 6.0f : (size == Size::Large ? 14.0f : UISpacing::ButtonPaddingY)
-    ));
-    
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
-    
+    // Modern 2025 button sizing - more compact
+    float paddingY = UISpacing::ButtonPaddingY;
+    float paddingX = UISpacing::ButtonPaddingX;
+
+    switch (size) {
+      case Size::Small:
+        paddingY = 4.0f;
+        paddingX = 10.0f;
+        break;
+      case Size::Medium:
+        paddingY = 6.0f;
+        paddingX = 14.0f;
+        break;
+      case Size::Large:
+        paddingY = 10.0f;
+        paddingX = 20.0f;
+        break;
+    }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(paddingX, paddingY));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);  // Slightly softer rounding
+
     // Set button colors based on variant
     ImVec4 button_color;
     ImVec4 button_hover;
     ImVec4 button_active;
-    ImVec4 text_color = ImGui::GetStyleColorVec4(ImGuiCol_Text);
-    
+
     switch (variant) {
       case Variant::Primary: {
-        // Use accent color from style
+        // Use accent color from style - already set globally
         button_color = ImGui::GetStyleColorVec4(ImGuiCol_Button);
         button_hover = ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered);
         button_active = ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive);
         break;
       }
       case Variant::Secondary: {
-        // Outlined style
-        button_color = ImVec4(0.0f, 0.0f, 0.0f, 0.0f); // Transparent
-        button_hover = ImVec4(0.2f, 0.2f, 0.2f, 0.5f);
-        button_active = ImVec4(0.3f, 0.3f, 0.3f, 0.7f);
-        ImGui::PushStyleColor(ImGuiCol_Border, ImGui::GetStyleColorVec4(ImGuiCol_Button));
+        // Modern ghost/outline style - subtle background on hover
+        button_color = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+        button_hover = ImVec4(0.25f, 0.27f, 0.32f, 0.4f);  // Subtle hover highlight
+        button_active = ImVec4(0.30f, 0.32f, 0.38f, 0.5f);
+        ImVec4 accent = ImGui::GetStyleColorVec4(ImGuiCol_Button);
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(accent.x * 0.7f, accent.y * 0.7f, accent.z * 0.7f, 0.6f));
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
         break;
       }
       case Variant::Tertiary: {
-        // Text-only
+        // Text-only with very subtle hover
         button_color = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-        button_hover = ImVec4(0.2f, 0.2f, 0.2f, 0.3f);
-        button_active = ImVec4(0.3f, 0.3f, 0.3f, 0.5f);
+        button_hover = ImVec4(0.20f, 0.22f, 0.26f, 0.3f);
+        button_active = ImVec4(0.25f, 0.27f, 0.32f, 0.4f);
         break;
       }
       case Variant::Danger: {
-        // Red variant
-        button_color = ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
-        button_hover = ImVec4(0.9f, 0.3f, 0.3f, 1.0f);
-        button_active = ImVec4(0.7f, 0.15f, 0.15f, 1.0f);
+        // Softer red - less aggressive
+        button_color = ImVec4(0.75f, 0.28f, 0.28f, 1.0f);
+        button_hover = ImVec4(0.82f, 0.35f, 0.35f, 1.0f);
+        button_active = ImVec4(0.68f, 0.22f, 0.22f, 1.0f);
         break;
       }
     }
-    
+
     ImGui::PushStyleColor(ImGuiCol_Button, button_color);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, button_hover);
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, button_active);
-    
+
     if (variant == Variant::Secondary) {
-      style_stack_depth += 2; // Border style var + colors
+      style_stack_depth += 2;
     } else {
-      style_stack_depth += 1; // Just colors
+      style_stack_depth += 1;
     }
   }
-  
+
   void PopStyle() {
-    ImGui::PopStyleColor(3); // Button, Hovered, Active
-    ImGui::PopStyleVar(2);   // Padding, Rounding
-    
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar(2);
+
     if (style_stack_depth > 1) {
-      ImGui::PopStyleVar(1); // Border size
-      ImGui::PopStyleColor(1); // Border color
+      ImGui::PopStyleVar(1);
+      ImGui::PopStyleColor(1);
       style_stack_depth -= 2;
     } else {
       style_stack_depth -= 1;
@@ -111,57 +125,55 @@ namespace UIButton {
 
 namespace UIInput {
   static int style_stack_depth = 0;
-  
+
   void PushStyle(ValidationState state) {
-    ImGuiStyle& style = ImGui::GetStyle();
-    
-    // Apply padding
+    // Modern 2025 input styling - compact, subtle, refined
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(
       UISpacing::InputPaddingX,
       UISpacing::InputPaddingY
     ));
-    
-    // Apply rounding
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-    
-    // Apply validation colors
+
+    // Softer rounding for modern feel
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+
+    // Apply validation colors with modern muted palette
     if (state != ValidationState::None) {
       ImVec4 frame_bg = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
       ImVec4 frame_bg_hover = ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered);
       ImVec4 frame_bg_active = ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive);
       ImVec4 border_color = ImGui::GetStyleColorVec4(ImGuiCol_Border);
-      
+
       switch (state) {
         case ValidationState::Valid:
-          // Green tint
-          frame_bg = ImVec4(0.2f, 0.6f, 0.3f, frame_bg.w);
-          frame_bg_hover = ImVec4(0.25f, 0.65f, 0.35f, frame_bg_hover.w);
-          frame_bg_active = ImVec4(0.3f, 0.7f, 0.4f, frame_bg_active.w);
-          border_color = ImVec4(0.3f, 0.7f, 0.4f, 1.0f);
+          // Teal-green tint - modern success color
+          frame_bg = ImVec4(0.12f, 0.20f, 0.16f, 1.0f);
+          frame_bg_hover = ImVec4(0.14f, 0.24f, 0.18f, 1.0f);
+          frame_bg_active = ImVec4(0.16f, 0.28f, 0.20f, 1.0f);
+          border_color = ImVec4(0.30f, 0.72f, 0.45f, 0.8f);
           break;
         case ValidationState::Warning:
-          // Yellow tint
-          frame_bg = ImVec4(0.7f, 0.6f, 0.2f, frame_bg.w);
-          frame_bg_hover = ImVec4(0.75f, 0.65f, 0.25f, frame_bg_hover.w);
-          frame_bg_active = ImVec4(0.8f, 0.7f, 0.3f, frame_bg_active.w);
-          border_color = ImVec4(0.9f, 0.7f, 0.2f, 1.0f);
+          // Warm amber tint - modern warning
+          frame_bg = ImVec4(0.22f, 0.18f, 0.10f, 1.0f);
+          frame_bg_hover = ImVec4(0.26f, 0.22f, 0.12f, 1.0f);
+          frame_bg_active = ImVec4(0.30f, 0.26f, 0.14f, 1.0f);
+          border_color = ImVec4(0.95f, 0.75f, 0.30f, 0.8f);
           break;
         case ValidationState::Error:
-          // Red tint
-          frame_bg = ImVec4(0.6f, 0.2f, 0.2f, frame_bg.w);
-          frame_bg_hover = ImVec4(0.65f, 0.25f, 0.25f, frame_bg_hover.w);
-          frame_bg_active = ImVec4(0.7f, 0.3f, 0.3f, frame_bg_active.w);
-          border_color = ImVec4(0.9f, 0.3f, 0.3f, 1.0f);
+          // Softer red tint - modern error
+          frame_bg = ImVec4(0.20f, 0.12f, 0.12f, 1.0f);
+          frame_bg_hover = ImVec4(0.24f, 0.14f, 0.14f, 1.0f);
+          frame_bg_active = ImVec4(0.28f, 0.16f, 0.16f, 1.0f);
+          border_color = ImVec4(0.90f, 0.35f, 0.35f, 0.8f);
           break;
         case ValidationState::None:
           break;
       }
-      
+
       ImGui::PushStyleColor(ImGuiCol_FrameBg, frame_bg);
       ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, frame_bg_hover);
       ImGui::PushStyleColor(ImGuiCol_FrameBgActive, frame_bg_active);
       ImGui::PushStyleColor(ImGuiCol_Border, border_color);
-      ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.5f);
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
       style_stack_depth = 5;
     } else {
       style_stack_depth = 2;
@@ -303,27 +315,31 @@ namespace UIToast {
       ImGui::SetNextWindowPos(ImVec2(start_x, current_y), ImGuiCond_Always);
       ImGui::SetNextWindowSize(ImVec2(toast_width, 0.0f), ImGuiCond_Always);
       
-      // Set colors based on type
+      // Modern 2025 toast colors - refined, muted backgrounds
       ImVec4 bg_color;
-      ImVec4 text_color = ImVec4(1.0f, 1.0f, 1.0f, alpha);
+      ImVec4 text_color = ImVec4(0.95f, 0.96f, 0.97f, alpha);
       ImVec4 border_color;
-      
+
       switch (toast.type) {
         case Type::Success:
-          bg_color = ImVec4(0.2f, 0.7f, 0.3f, 0.95f * alpha);
-          border_color = ImVec4(0.3f, 0.8f, 0.4f, alpha);
+          // Teal-green - matches modern success color
+          bg_color = ImVec4(0.15f, 0.22f, 0.18f, 0.95f * alpha);
+          border_color = ImVec4(0.30f, 0.72f, 0.45f, 0.6f * alpha);
           break;
         case Type::Warning:
-          bg_color = ImVec4(0.9f, 0.7f, 0.2f, 0.95f * alpha);
-          border_color = ImVec4(1.0f, 0.8f, 0.3f, alpha);
+          // Warm amber - less saturated
+          bg_color = ImVec4(0.24f, 0.20f, 0.12f, 0.95f * alpha);
+          border_color = ImVec4(0.95f, 0.75f, 0.30f, 0.6f * alpha);
           break;
         case Type::Error:
-          bg_color = ImVec4(0.8f, 0.2f, 0.2f, 0.95f * alpha);
-          border_color = ImVec4(0.9f, 0.3f, 0.3f, alpha);
+          // Softer red - less aggressive
+          bg_color = ImVec4(0.22f, 0.13f, 0.13f, 0.95f * alpha);
+          border_color = ImVec4(0.90f, 0.35f, 0.35f, 0.6f * alpha);
           break;
         case Type::Info:
-          bg_color = ImVec4(0.2f, 0.5f, 0.9f, 0.95f * alpha);
-          border_color = ImVec4(0.3f, 0.6f, 1.0f, alpha);
+          // Sky blue - matches modern info color
+          bg_color = ImVec4(0.14f, 0.18f, 0.24f, 0.95f * alpha);
+          border_color = ImVec4(0.40f, 0.65f, 0.95f, 0.6f * alpha);
           break;
       }
       
@@ -375,23 +391,28 @@ namespace UIToast {
 namespace UIStyle {
   void ApplySpacing() {
     ImGuiStyle& style = ImGui::GetStyle();
-    
-    // Item spacing (horizontal and vertical)
+
+    // Item spacing - tighter for modern feel
     style.ItemSpacing = ImVec2(UISpacing::SM, UISpacing::SM);
-    style.ItemInnerSpacing = ImVec2(UISpacing::XS, UISpacing::XS);
-    
-    // Window padding
+    style.ItemInnerSpacing = ImVec2(UISpacing::XS, UISpacing::XXS);
+
+    // Window padding - reduced for less wasted space
     style.WindowPadding = ImVec2(UISpacing::WindowPadding, UISpacing::WindowPadding);
     style.FramePadding = ImVec2(UISpacing::InputPaddingX, UISpacing::InputPaddingY);
-    style.CellPadding = ImVec2(UISpacing::XS, UISpacing::XS);
-    
-    // Indent
-    style.IndentSpacing = 20.0f;
-    style.ScrollbarSize = 14.0f;
-    
-    // Child window padding
-    style.ChildRounding = 6.0f;
-    style.ChildBorderSize = 1.0f;
+    style.CellPadding = ImVec2(UISpacing::XS, UISpacing::XXS);
+
+    // Indent - slightly reduced
+    style.IndentSpacing = 16.0f;
+
+    // Scrollbar - slimmer, more modern
+    style.ScrollbarSize = 10.0f;
+    style.GrabMinSize = 8.0f;
+
+    // Touch/click target minimum
+    style.TouchExtraPadding = ImVec2(0.0f, 0.0f);
+
+    // Separator thickness
+    style.SeparatorTextBorderSize = 1.0f;
   }
   
   void ApplyTypography() {
@@ -409,35 +430,49 @@ namespace UIStyle {
   
   void ApplyProfessionalStyle() {
     ImGuiStyle& style = ImGui::GetStyle();
-    
+
     // Apply spacing
     ApplySpacing();
-    
+
     // Apply typography
     ApplyTypography();
-    
-    // Rounding
-    style.WindowRounding = 8.0f;
-    style.FrameRounding = 6.0f;
-    style.GrabRounding = 6.0f;
-    style.ScrollbarRounding = 6.0f;
-    style.TabRounding = 6.0f;
-    style.ChildRounding = 6.0f;
-    style.PopupRounding = 8.0f;
-    
-    // Borders
-    style.WindowBorderSize = 1.0f;
-    style.FrameBorderSize = 1.0f;
-    style.PopupBorderSize = 1.0f;
-    style.ChildBorderSize = 1.0f;
-    
+
+    // Modern 2025 rounding - softer, more refined
+    style.WindowRounding = 10.0f;      // Slightly increased for softer windows
+    style.FrameRounding = 5.0f;        // Subtle rounding on inputs/buttons
+    style.GrabRounding = 4.0f;         // Sliders
+    style.ScrollbarRounding = 5.0f;    // Scrollbar
+    style.TabRounding = 5.0f;          // Tabs
+    style.ChildRounding = 8.0f;        // Child panels
+    style.PopupRounding = 10.0f;       // Popups/modals
+
+    // Borders - REDUCED for modern flat look
+    style.WindowBorderSize = 0.0f;     // No window borders - cleaner
+    style.FrameBorderSize = 0.0f;      // No input borders by default - less cluttered
+    style.PopupBorderSize = 1.0f;      // Keep popup border for definition
+    style.ChildBorderSize = 0.0f;      // No child borders - cleaner panels
+    style.TabBorderSize = 0.0f;        // No tab borders
+
     // Anti-aliasing
     style.AntiAliasedLines = true;
     style.AntiAliasedFill = true;
     style.AntiAliasedLinesUseTex = true;
 
+    // Window styling
+    style.WindowTitleAlign = ImVec2(0.5f, 0.5f);  // Center window titles
+    style.WindowMenuButtonPosition = ImGuiDir_None;  // Hide menu button for cleaner look
+
+    // Alpha and transparency
+    style.Alpha = 1.0f;
+    style.DisabledAlpha = 0.5f;
+
     // Disable drag-drop target yellow border (we use custom blue line indicator instead)
     style.Colors[ImGuiCol_DragDropTarget] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    // Hover/active highlight intensity
+    style.HoverStationaryDelay = 0.15f;  // Faster hover response
+    style.HoverDelayShort = 0.15f;
+    style.HoverDelayNormal = 0.3f;
   }
   
   void ApplyPanelStyling() {
@@ -694,38 +729,47 @@ namespace UIPanel {
   
   void DrawShadow(const ImVec2& min, const ImVec2& max, Elevation elevation, float rounding) {
     if (elevation == Elevation::Flat) return;
-    
+
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    ImVec4 shadow_color;
-    float shadow_size;
-    
+    float shadow_offset_y;
+    float shadow_blur;
+    float base_alpha;
+
+    // Modern 2025 shadows - soft, directional (light from top)
     switch (elevation) {
       case Elevation::Subtle:
-        shadow_color = ImVec4(0.0f, 0.0f, 0.0f, 0.1f);
-        shadow_size = 2.0f;
+        shadow_offset_y = 1.0f;
+        shadow_blur = 3.0f;
+        base_alpha = 0.08f;
         break;
       case Elevation::Medium:
-        shadow_color = ImVec4(0.0f, 0.0f, 0.0f, 0.15f);
-        shadow_size = 4.0f;
+        shadow_offset_y = 2.0f;
+        shadow_blur = 6.0f;
+        base_alpha = 0.12f;
         break;
       case Elevation::Strong:
-        shadow_color = ImVec4(0.0f, 0.0f, 0.0f, 0.25f);
-        shadow_size = 8.0f;
+        shadow_offset_y = 4.0f;
+        shadow_blur = 12.0f;
+        base_alpha = 0.20f;
         break;
       default:
         return;
     }
-    
-    // Draw shadow (simplified - multiple passes for blur effect)
-    for (int i = 0; i < 3; ++i) {
-      float offset = shadow_size * (i + 1) / 3.0f;
-      float alpha = shadow_color.w * (1.0f - i * 0.3f);
-      ImVec4 color = ImVec4(shadow_color.x, shadow_color.y, shadow_color.z, alpha);
+
+    // Multi-pass shadow for soft blur effect
+    const int passes = 4;
+    for (int i = passes - 1; i >= 0; --i) {
+      float t = (float)(i + 1) / passes;
+      float expand = shadow_blur * t;
+      float offset_y = shadow_offset_y * t;
+      float alpha = base_alpha * (1.0f - t * 0.6f);
+
+      ImVec4 shadow_color = ImVec4(0.0f, 0.0f, 0.0f, alpha);
       draw_list->AddRectFilled(
-        ImVec2(min.x + offset, min.y + offset),
-        ImVec2(max.x + offset, max.y + offset),
-        ImGui::ColorConvertFloat4ToU32(color),
-        rounding
+        ImVec2(min.x - expand * 0.3f, min.y + offset_y),
+        ImVec2(max.x + expand * 0.3f, max.y + expand * 0.5f + offset_y),
+        ImGui::ColorConvertFloat4ToU32(shadow_color),
+        rounding + expand * 0.2f
       );
     }
   }
@@ -998,23 +1042,24 @@ namespace UIEmptyState {
 namespace UIBadge {
   void Draw(const char* text, Type type, bool small) {
     ImVec4 bg_color;
-    ImVec4 text_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-    
+    ImVec4 text_color = ImVec4(0.95f, 0.96f, 0.97f, 1.0f);
+
+    // Modern 2025 badge colors - muted, refined
     switch (type) {
       case Type::Success:
-        bg_color = ImVec4(0.2f, 0.7f, 0.3f, 1.0f);
+        bg_color = ImVec4(0.22f, 0.55f, 0.38f, 1.0f);  // Teal-green
         break;
       case Type::Warning:
-        bg_color = ImVec4(0.9f, 0.7f, 0.2f, 1.0f);
+        bg_color = ImVec4(0.75f, 0.58f, 0.25f, 1.0f);  // Warm amber
         break;
       case Type::Error:
-        bg_color = ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
+        bg_color = ImVec4(0.72f, 0.30f, 0.30f, 1.0f);  // Softer red
         break;
       case Type::Info:
-        bg_color = ImVec4(0.2f, 0.5f, 0.9f, 1.0f);
+        bg_color = ImVec4(0.32f, 0.52f, 0.78f, 1.0f);  // Sky blue
         break;
       case Type::Neutral:
-        bg_color = ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+        bg_color = ImVec4(0.35f, 0.38f, 0.42f, 1.0f);  // Cool gray
         break;
     }
     

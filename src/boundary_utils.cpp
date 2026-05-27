@@ -30,14 +30,45 @@ std::string NormalizeLatexExpr(const std::string& input) {
     }
   };
 
+  // LaTeX decorators
   replace_all(&out, "\\left", "");
   replace_all(&out, "\\right", "");
   replace_all(&out, "\\cdot", "*");
   replace_all(&out, "\\times", "*");
+
+  // Greek letters / coordinate names
   replace_all(&out, "\\vartheta", "theta");
   replace_all(&out, "\\theta", "theta");
   replace_all(&out, "\\varphi", "phi");
   replace_all(&out, "\\phi", "phi");
+  replace_all(&out, "\\pi", "pi");
+
+  // Trigonometric functions
+  replace_all(&out, "\\sin", "sin");
+  replace_all(&out, "\\cos", "cos");
+  replace_all(&out, "\\tan", "tan");
+  replace_all(&out, "\\sinh", "sinh");
+  replace_all(&out, "\\cosh", "cosh");
+  replace_all(&out, "\\tanh", "tanh");
+  replace_all(&out, "\\arcsin", "asin");
+  replace_all(&out, "\\arccos", "acos");
+  replace_all(&out, "\\arctan", "atan");
+
+  // Exponential and logarithmic
+  replace_all(&out, "\\exp", "exp");
+  replace_all(&out, "\\ln", "log");
+  replace_all(&out, "\\log", "log");
+
+  // Other functions
+  replace_all(&out, "\\sqrt", "sqrt");
+  replace_all(&out, "\\abs", "abs");
+  replace_all(&out, "\\floor", "floor");
+  replace_all(&out, "\\ceil", "ceil");
+  replace_all(&out, "\\sign", "sign");
+  replace_all(&out, "\\erf", "erf");
+  replace_all(&out, "\\min", "min");
+  replace_all(&out, "\\max", "max");
+
   return Trim(out);
 }
 

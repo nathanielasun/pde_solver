@@ -184,6 +184,9 @@ enum class BCKind {
   Dirichlet,
   Neumann,
   Robin,
+  Inflow,        // hyperbolic: fixed ghost (scalar inflow)
+  Outflow,       // hyperbolic: zero-gradient / transmissive outflow
+  Transmissive,  // hyperbolic: copy interior to ghost
 };
 
 struct BoundaryCondition {
@@ -245,6 +248,35 @@ enum class AdvectionScheme {
   Superbee,      // TVD with superbee limiter
   VanLeer,       // TVD with van Leer limiter
   MC,            // TVD with MC limiter
+};
+
+enum class ProblemForm {
+  LinearOperator,
+  NonlinearResidual,
+  ConservationLaw,
+};
+
+enum class Discretization {
+  FiniteDifference,
+  FiniteVolume,
+};
+
+enum class NonlinearSolveMode {
+  FixedPoint,
+  Newton,
+};
+
+struct ConservationLawConfig {
+  std::string flux_latex;  // e.g. "0.5*u^2" for Burgers
+  AdvectionScheme limiter_scheme = AdvectionScheme::MinMod;
+  enum class RiemannSolver { LaxFriedrichs, HLL } riemann = RiemannSolver::LaxFriedrichs;
+};
+
+struct NonlinearSolveConfig {
+  NonlinearSolveMode mode = NonlinearSolveMode::FixedPoint;
+  int max_newton_iter = 20;
+  double newton_tol = 1e-8;
+  bool line_search = true;
 };
 
 struct SolverConfig {
@@ -374,6 +406,11 @@ struct SolveInput {
 
   // Coupling configuration for multi-field systems
   CouplingConfig coupling;
+
+  ProblemForm problem_form = ProblemForm::LinearOperator;
+  Discretization discretization = Discretization::FiniteDifference;
+  ConservationLawConfig conservation;
+  NonlinearSolveConfig nonlinear_solve;
 };
 
 struct SolveOutput {

@@ -14,6 +14,8 @@ struct BackendCapabilities {
   bool supports_3d = false;
   bool supports_spatial_rhs = false;
   bool supports_nonlinear = false;
+  bool supports_nonlinear_derivatives = false;
+  bool supports_conservation_fv = false;
   bool supports_integrals = false;
   bool supports_shapes = false;
   bool supports_time_dependent = false;

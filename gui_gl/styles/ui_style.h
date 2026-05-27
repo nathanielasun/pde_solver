@@ -6,28 +6,37 @@
 #include <functional>
 
 // ============================================================================
-// SPACING SYSTEM (4px/8px grid)
+// SPACING SYSTEM (Modern 2025 Design - tighter, more refined)
 // ============================================================================
 
 namespace UISpacing {
   // Base spacing unit (4px grid)
   constexpr float Unit = 4.0f;
-  
-  // Spacing scale
+
+  // Spacing scale - tighter for modern feel
+  constexpr float XXS = 2.0f;  // Micro spacing (inline elements)
   constexpr float XS = 4.0f;   // Tight spacing (related items)
-  constexpr float SM = 8.0f;   // Standard spacing (form fields)
-  constexpr float MD = 12.0f;  // Medium spacing
-  constexpr float LG = 16.0f;  // Section spacing (between panels)
-  constexpr float XL = 24.0f;  // Major section spacing
-  constexpr float XXL = 32.0f; // Panel spacing (between top-level panels)
-  
-  // Padding
-  constexpr float InputPaddingY = 8.0f;
-  constexpr float InputPaddingX = 12.0f;
-  constexpr float ButtonPaddingY = 10.0f;
-  constexpr float ButtonPaddingX = 20.0f;
-  constexpr float PanelPadding = 16.0f;
-  constexpr float WindowPadding = 20.0f;
+  constexpr float SM = 6.0f;   // Standard spacing (form fields) - reduced from 8
+  constexpr float MD = 10.0f;  // Medium spacing - reduced from 12
+  constexpr float LG = 14.0f;  // Section spacing - reduced from 16
+  constexpr float XL = 20.0f;  // Major section spacing - reduced from 24
+  constexpr float XXL = 28.0f; // Panel spacing - reduced from 32
+
+  // Padding - more refined proportions
+  constexpr float InputPaddingY = 6.0f;   // Reduced from 8 - sleeker inputs
+  constexpr float InputPaddingX = 10.0f;  // Reduced from 12
+  constexpr float ButtonPaddingY = 7.0f;  // Reduced from 10 - more compact buttons
+  constexpr float ButtonPaddingX = 14.0f; // Reduced from 20 - tighter buttons
+  constexpr float PanelPadding = 12.0f;   // Reduced from 16
+  constexpr float WindowPadding = 14.0f;  // Reduced from 20 - less wasted space
+
+  // New: Content area padding (for main content vs sidebars)
+  constexpr float ContentPadding = 16.0f;
+  constexpr float SidebarPadding = 10.0f;
+
+  // New: Section divider spacing
+  constexpr float SectionGap = 18.0f;     // Between major sections
+  constexpr float SubsectionGap = 10.0f;  // Between subsections
 }
 
 // ============================================================================

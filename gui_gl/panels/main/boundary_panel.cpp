@@ -111,8 +111,12 @@ void RenderBoundaryInputs(BoundaryPanelState& state) {
     std::string latex;
     std::string error;
     if (BuildBoundaryLatex(input, &latex, &error)) {
-      UpdateLatexTexture(preview, latex, state.python_path, state.script_path,
-                         state.cache_dir, state.latex_color, state.latex_font_size);
+      if (latex != preview.source) {
+        preview.dirty = true;
+      }
+      if (preview.dirty || preview.pending || preview.texture == 0) {
+        UpdateLatexTexture(preview, latex, state.latex_color, state.latex_font_size);
+      }
       if (!preview.error.empty()) {
         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", preview.error.c_str());
       } else if (preview.texture != 0) {
@@ -206,6 +210,26 @@ void RenderBoundaryInputs(BoundaryPanelState& state) {
     ImGui::EndTable();
   }
   ImGui::PopStyleVar();
+
+  // Help section showing supported functions
+  ImGui::Spacing();
+  ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+  if (ImGui::TreeNode("Supported Functions")) {
+    ImGui::TextWrapped(
+      "Boundary conditions support the following mathematical expressions:\n\n"
+      "Variables: x, y, z, t (time), r, theta, phi\n"
+      "Constants: pi, e\n\n"
+      "Trigonometric: sin, cos, tan, sinh, cosh, tanh\n"
+      "Inverse trig: asin, acos, atan, atan2(y,x)\n"
+      "Exponential: exp, log (natural), sqrt\n"
+      "Rounding: floor, ceil, round\n"
+      "Other: abs, sign, erf, min(a,b), max(a,b), pow(x,n)\n\n"
+      "LaTeX notation supported: \\sin, \\cos, \\frac{a}{b}, \\sqrt{x}, etc.\n"
+      "Examples: sin(pi*x), exp(-x^2), sqrt(x^2+y^2)"
+    );
+    ImGui::TreePop();
+  }
+  ImGui::PopStyleColor();
 }
 
 }  // namespace

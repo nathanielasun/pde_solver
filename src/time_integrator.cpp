@@ -317,9 +317,16 @@ TimeStepResult TimeStep(std::vector<double>& u, double t, double dt,
       return CrankNicolsonStep(u, t, dt, rhs,
                                 config.implicit_max_iter, config.implicit_tol);
     case TimeIntegrator::IMEX:
-      // IMEX requires splitting - fall back to CN for now
-      return CrankNicolsonStep(u, t, dt, rhs,
-                                config.implicit_max_iter, config.implicit_tol);
+      if (config.rhs_explicit && config.rhs_implicit) {
+        return IMEXEulerStep(u, t, dt, config.rhs_explicit, config.rhs_implicit,
+                             config.implicit_max_iter, config.implicit_tol);
+      }
+      {
+        TimeStepResult imex_fail;
+        imex_fail.success = false;
+        imex_fail.error = "IMEX requires explicit and implicit RHS callbacks";
+        return imex_fail;
+      }
     default:
       return ForwardEulerStep(u, t, dt, rhs);
   }

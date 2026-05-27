@@ -37,9 +37,6 @@ struct BoundaryPanelState {
   bool& use_volume;
   
   // LaTeX rendering settings
-  std::string& python_path;
-  std::filesystem::path& script_path;
-  std::filesystem::path& cache_dir;
   std::string& latex_color;
   int& latex_font_size;
   

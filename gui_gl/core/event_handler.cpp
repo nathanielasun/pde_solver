@@ -1,23 +1,5 @@
 #include "event_handler.h"
 
-// #region agent log
-#include <fstream>
-#include <chrono>
-#include <string>
-static void AgentLog8(const char* location, const char* message, const char* hypothesisId,
-                      const std::string& dataJson = "{}") {
-  std::ofstream f("/Users/nathaniel.sun/Desktop/programming/cursor/.cursor/debug.log",
-                  std::ios::app);
-  if (!f) return;
-  const auto ts = std::chrono::duration_cast<std::chrono::milliseconds>(
-                      std::chrono::system_clock::now().time_since_epoch())
-                      .count();
-  f << "{\"sessionId\":\"debug-session\",\"runId\":\"run8\",\"hypothesisId\":\""
-    << hypothesisId << "\",\"location\":\"" << location << "\",\"message\":\""
-    << message << "\",\"data\":" << dataJson << ",\"timestamp\":" << ts << "}\n";
-}
-// #endregion agent log
-
 bool EventHandler::IsModPressed(const ImGuiIO& io) {
 #ifdef __APPLE__
   return io.KeySuper;
@@ -61,21 +43,6 @@ void EventHandler::ProcessShortcuts(const ImGuiIO& io) {
 
   // Mod+R - Reset view
   if (mod_pressed && !shift_pressed && ImGui::IsKeyPressed(ImGuiKey_R)) {
-    // #region agent log
-    {
-      static int budget = 200;
-      if (budget-- > 0) {
-        AgentLog8("gui_gl/core/event_handler.cpp:ProcessShortcuts",
-                  "Shortcut triggered: Mod+R (reset view)",
-                  "P",
-                  std::string("{\"keySuper\":") + (io.KeySuper ? "true" : "false") +
-                      ",\"keyCtrl\":" + (io.KeyCtrl ? "true" : "false") +
-                      ",\"keyShift\":" + (io.KeyShift ? "true" : "false") +
-                      ",\"wantCaptureKeyboard\":" + (io.WantCaptureKeyboard ? "true" : "false") +
-                      ",\"running\":null}");
-      }
-    }
-    // #endregion agent log
     trigger(AppAction::kResetView);
   }
 

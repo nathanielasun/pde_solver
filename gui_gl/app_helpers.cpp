@@ -227,91 +227,6 @@ bool RenderLatexToPng(const std::string& python, const std::filesystem::path& sc
   return RunProcess(args, error);
 }
 
-bool LoadTextureFromFile(const std::filesystem::path& path, unsigned int* texture, int* width,
-                         int* height, std::string* error) {
-  int w = 0;
-  int h = 0;
-  int channels = 0;
-  stbi_uc* data = stbi_load(path.string().c_str(), &w, &h, &channels, 4);
-  if (!data) {
-    if (error) {
-      *error = stbi_failure_reason() ? stbi_failure_reason() : "failed to load png";
-    }
-    return false;
-  }
-
-  if (*texture == 0) {
-    glGenTextures(1, reinterpret_cast<GLuint*>(texture));
-  }
-  glBindTexture(GL_TEXTURE_2D, *reinterpret_cast<GLuint*>(texture));
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glBindTexture(GL_TEXTURE_2D, 0);
-
-  stbi_image_free(data);
-  if (width) {
-    *width = w;
-  }
-  if (height) {
-    *height = h;
-  }
-  return true;
-}
-
-void UpdateLatexTexture(LatexTexture& tex, const std::string& source,
-                        const std::string& python_path, const std::filesystem::path& script_path,
-                        const std::filesystem::path& cache_dir,
-                        const std::string& color, int font_size) {
-  if (script_path.empty()) {
-    if (!source.empty()) {
-      tex.error = "latex renderer not found";
-    }
-    return;
-  }
-
-  const auto now = std::chrono::steady_clock::now();
-  if (source != tex.source || color != tex.color || font_size != tex.font_size) {
-    tex.source = source;
-    tex.color = color;
-    tex.font_size = font_size;
-    tex.dirty = true;
-    tex.last_edit = now;
-  }
-  if (!tex.dirty) {
-    return;
-  }
-  if (now - tex.last_edit < std::chrono::milliseconds(350)) {
-    return;
-  }
-
-  tex.dirty = false;
-  tex.error.clear();
-  tex.last_rendered = tex.source;
-
-  if (tex.source.empty()) {
-    return;
-  }
-
-  std::hash<std::string> hasher;
-  const size_t tag = hasher(tex.source + color + std::to_string(tex.font_size));
-  std::filesystem::path out_path = cache_dir / ("latex_" + std::to_string(tag) + ".png");
-
-  std::string render_error;
-  if (!RenderLatexToPng(python_path, script_path, tex.source, out_path, color, tex.font_size,
-                        &render_error)) {
-    tex.error = render_error.empty() ? "render failed" : render_error;
-    return;
-  }
-
-  std::string load_error;
-  if (!LoadTextureFromFile(out_path, &tex.texture, &tex.width, &tex.height, &load_error)) {
-    tex.error = load_error.empty() ? "failed to load preview" : load_error;
-  }
-}
-
-
 // Backend and method conversion
 BackendKind BackendFromIndex(int index) {
   switch (index) {
@@ -410,27 +325,6 @@ Vec3 RotateVec(const Vec3& v, float yaw, float pitch) {
 ImU32 AxisColor(float r, float g, float b, float depth) {
   const float shade = 0.4f + 0.6f * std::max(0.0f, std::min(1.0f, (depth + 1.0f) * 0.5f));
   return ImColor(r * shade, g * shade, b * shade, 1.0f);
-}
-
-void DrawLatexPreview(const LatexTexture& tex, float max_width, float max_height) {
-  if (tex.texture == 0) {
-    return;
-  }
-  float w = static_cast<float>(tex.width);
-  float h = static_cast<float>(tex.height);
-  if (w <= 0.0f || h <= 0.0f) {
-    w = max_width;
-    h = max_height;
-  }
-  float scale = 1.0f;
-  if (w > max_width) {
-    scale = max_width / w;
-  }
-  if (h * scale > max_height) {
-    scale = std::min(scale, max_height / h);
-  }
-  ImGui::Image(reinterpret_cast<void*>(static_cast<intptr_t>(tex.texture)),
-               ImVec2(w * scale, h * scale), ImVec2(0, 0), ImVec2(1, 1));
 }
 
 void DrawGimbal(GlViewer& viewer, const ImVec2& top_right, float size, ImGuiIO& io) {

@@ -1,5 +1,7 @@
 # PDE Terms Implementation Plan
 
+> **Note:** Active execution plan: [`MASTER_ROADMAP.md`](MASTER_ROADMAP.md). This file preserves detailed tier specifications.
+
 This document provides a detailed multistep implementation plan for each recommendation in `PDE_TERMS_RECOMMENDATIONS.md`, organized by priority tier.
 It now also includes consolidated expansion roadmaps (Options 1-3) so the
 term-level work is connected to the broader PDE expansion strategy.

@@ -95,6 +95,9 @@ std::string NormalizeLatex(const std::string& input) {
   }), out.end());
 
   ReplaceAll(out, "^{2}", "^2");
+  ReplaceAll(out, "_{xx}", "_xx");
+  ReplaceAll(out, "_{yy}", "_yy");
+  ReplaceAll(out, "_{zz}", "_zz");
   ReplaceAll(out, "_{x}", "_x");
   ReplaceAll(out, "_{y}", "_y");
   ReplaceAll(out, "_{t}", "_t");
@@ -297,8 +300,74 @@ bool DetectMixedDerivative(const std::string& text, std::string* error) {
 }
 }
 
+namespace {
+bool ExtractBalancedParens(const std::string& text, size_t open_paren, std::string* inner) {
+  if (open_paren >= text.size() || text[open_paren] != '(') {
+    return false;
+  }
+  int depth = 0;
+  const size_t start = open_paren + 1;
+  for (size_t i = open_paren; i < text.size(); ++i) {
+    if (text[i] == '(') {
+      ++depth;
+    } else if (text[i] == ')') {
+      --depth;
+      if (depth == 0) {
+        *inner = text.substr(start, i - start);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+std::string RewriteDivergenceTerms(std::string expr) {
+  const std::vector<std::pair<std::string, std::string>> replacements = {
+      {"d/dx(0.5*u^2)", "u*u_x"},
+      {"d/dx(0.5*u*u)", "u*u_x"},
+      {"\\frac{d}{dx}(0.5*u^2)", "u*u_x"},
+      {"\\frac{d}{dx}(0.5*u*u)", "u*u_x"},
+  };
+  for (const auto& [from, to] : replacements) {
+    size_t pos = 0;
+    while ((pos = expr.find(from, pos)) != std::string::npos) {
+      expr.replace(pos, from.size(), to);
+      pos += to.size();
+    }
+  }
+  return expr;
+}
+
+void DetectConservationDivergence(const std::string& expr,
+                                bool* detected,
+                                std::string* flux_latex) {
+  if (!detected || !flux_latex) {
+    return;
+  }
+  *detected = false;
+  flux_latex->clear();
+  const std::vector<std::string> markers = {
+      "d/dx(", "d/dy(", "\\frac{d}{dx}(", "\\frac{d}{dy}(",
+      "\\partial_x(", "\\partial_y("};
+  for (const auto& marker : markers) {
+    const size_t pos = expr.find(marker);
+    if (pos == std::string::npos) {
+      continue;
+    }
+    const size_t open = pos + marker.size() - 1;
+    std::string inner;
+    if (!ExtractBalancedParens(expr, open, &inner)) {
+      continue;
+    }
+    *detected = true;
+    *flux_latex = inner;
+    return;
+  }
+}
+}  // namespace
+
 LatexParseResult LatexParser::Parse(const std::string& latex) const {
-  std::string clean = StripDecorations(latex);
+  std::string clean = RewriteDivergenceTerms(StripDecorations(latex));
   if (clean.empty()) {
     return MakeErrorResult("empty latex input");
   }
@@ -355,6 +424,8 @@ LatexParseResult LatexParser::Parse(const std::string& latex) const {
   }
   LatexParseResult result;
   result.ok = true;
+  result.source_latex = latex;
+  DetectConservationDivergence(left, &result.conservation_divergence, &result.conservation_flux_latex);
   result.coeffs = coeffs;
   result.integrals = std::move(integrals);
   result.nonlinear = std::move(nonlinear);

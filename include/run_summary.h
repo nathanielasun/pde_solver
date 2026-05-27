@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "backend.h"
+#include "pde_types.h"
 #include "run_config.h"
 
 struct RunSummaryData {
@@ -49,6 +50,13 @@ struct RunSummaryData {
   std::vector<double> monitor_energy_drift_history;
 
   std::vector<double> frame_times;
+
+  std::string problem_form;
+  std::string discretization;
+  std::string integrator;
+  int newton_iterations = -1;
+  double cfl_max = 0.0;
+  std::string failure_reason;
 };
 
 std::filesystem::path SummarySidecarPath(const std::filesystem::path& output_path);
@@ -59,5 +67,7 @@ bool WriteRunSummarySidecar(const std::filesystem::path& output_path,
 bool ReadRunSummarySidecar(const std::filesystem::path& output_path,
                            std::string* summary_json,
                            std::string* error);
+
+void PopulateNonlinearPipelineSummary(const SolveInput& input, RunSummaryData* data);
 
 #endif  // RUN_SUMMARY_H

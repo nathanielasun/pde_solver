@@ -3,6 +3,7 @@
 #include "application.h"
 #include "native_menu.h"
 #include "../app_helpers.h"
+#include "../latex/latex_render_service.h"
 #include "../handlers/file_handler.h"
 #include "../handlers/solve_handler.h"
 #include "../panels/main/equation_panel.h"
@@ -49,6 +50,7 @@
 #include "../systems/solver_method_registry.h"
 #include "../systems/ui_config.h"
 #include "../docking/docking_context.h"
+#include "../docking/layout_serializer.h"
 #include "../docking/view_registration.h"
 #include "../docking/preset_layouts.h"
 #include "../styles/ui_style.h"
@@ -345,6 +347,7 @@ Application::Application(int argc, char** argv)
 }
 
 Application::~Application() {
+  LatexRenderService::Instance().Shutdown();
   solver_manager_.Join();
   viewer_.Shutdown();
   ImGui_ImplOpenGL3_Shutdown();
@@ -776,7 +779,7 @@ void Application::RegisterPanelRenderers() {
       method_index_, sor_omega_, gmres_restart_,
       time_start_, time_end_, time_frames_,
       viewer_, [this]() { app_state_.UpdateCoordinateFlags(); }, pde_preview_,
-      python_path_, script_path_, cache_dir_, latex_color_, latex_font_size_,
+      latex_color_, latex_font_size_,
       input_width_, &cmd_history_
     };
     RenderEquationPanel(eq_state, panel.components);
@@ -810,7 +813,7 @@ void Application::RegisterPanelRenderers() {
       s.use_surface,
       s.use_volume,
       shape_preview_,
-      python_path_, script_path_, cache_dir_, latex_color_, latex_font_size_,
+      latex_color_, latex_font_size_,
       input_width_,
       &cmd_history_
     };
@@ -847,7 +850,7 @@ void Application::RegisterPanelRenderers() {
       s.use_cylindrical_volume,
       s.use_surface,
       s.use_volume,
-      python_path_, script_path_, cache_dir_, latex_color_, latex_font_size_,
+      latex_color_, latex_font_size_,
       &cmd_history_
     };
     RenderBoundaryPanel(bc_state, panel.components);
@@ -951,7 +954,8 @@ void Application::RegisterPanelRenderers() {
           solver_mg_pre_smooth_, solver_mg_post_smooth_, solver_mg_coarse_iters_, solver_mg_max_levels_,
           thread_count_,
           metal_reduce_interval_, metal_tg_x_, metal_tg_y_,
-          time_start_, time_end_, time_frames_, output_path_,
+          time_start_, time_end_, time_frames_, discretization_index_,
+          time_integration_method_, output_path_,
           shared_state_, state_mutex_, viewer_,
           solver_manager_.ThreadPtr(),
           solver_manager_.CancelFlag(),
@@ -1066,7 +1070,9 @@ void Application::RegisterPanelRenderers() {
       state_mutex_,
       shared_state_.current_domain,
       shared_state_.current_grid,
-      input_width_
+      input_width_,
+      frame_paths_,
+      frame_index_
     };
     RenderComparisonPanel(comparison_state, panel.components);
   };
@@ -1144,7 +1150,9 @@ void Application::RegisterPanelRenderers() {
           state_mutex_,
           shared_state_.current_domain,
           shared_state_.current_grid,
-          input_width_
+          input_width_,
+          frame_paths_,
+          frame_index_
         };
         RenderComparisonPanel(comparison_state, {id});
       } else {
@@ -1167,7 +1175,7 @@ void Application::RegisterPanelRenderers() {
       }
     };
     ComputePanelState compute_state{
-      backend_index_, method_index_, sor_omega_, gmres_restart_,
+      discretization_index_, backend_index_, method_index_, sor_omega_, gmres_restart_,
       pref_method_index_, pref_sor_omega_, pref_gmres_restart_, prefs_changed_,
       thread_count_, max_threads_,
       metal_reduce_interval_, metal_tg_x_, metal_tg_y_,
@@ -1243,6 +1251,10 @@ void Application::RegisterPanelRenderers() {
         if (UIInput::SliderInt("Font size", &latex_font_size_, 10, 36)) {
           latex_font_size_ = std::max(8, latex_font_size_);
           prefs_changed_ = true;
+          LatexRenderStyle style;
+          style.font_size = latex_font_size_;
+          style.fg_hex = latex_color_;
+          LatexRenderService::Instance().SetGlobalStyle(style);
           pde_preview_.dirty = true;
           shape_preview_.dirty = true;
           bc_left_preview_.dirty = true;
@@ -1315,7 +1327,8 @@ void Application::RegisterPanelRenderers() {
           solver_mg_pre_smooth_, solver_mg_post_smooth_, solver_mg_coarse_iters_, solver_mg_max_levels_,
           thread_count_,
           metal_reduce_interval_, metal_tg_x_, metal_tg_y_,
-          time_start_, time_end_, time_frames_, output_path_,
+          time_start_, time_end_, time_frames_, discretization_index_,
+          time_integration_method_, output_path_,
           shared_state_, state_mutex_, viewer_,
           solver_manager_.ThreadPtr(),
           solver_manager_.CancelFlag(),
@@ -1367,9 +1380,27 @@ void Application::RegisterPanelRenderers() {
   };
 
   panel_registry_["preset_manager"] = [this](const PanelConfig& panel, bool) {
+    // Default preset directory to a "presets" folder next to the executable
+    if (preset_directory_.empty()) {
+      std::filesystem::path dir = exec_path_.empty() ?
+          std::filesystem::current_path() : exec_path_.parent_path();
+      preset_directory_ = (dir / "presets").string();
+    }
     PresetManagerPanelState state{
       input_width_,
-      preset_directory_
+      preset_directory_,
+      pde_text_,
+      bound_xmin_, bound_xmax_,
+      bound_ymin_, bound_ymax_,
+      bound_zmin_, bound_zmax_,
+      grid_nx_, grid_ny_, grid_nz_,
+      coord_mode_,
+      method_index_,
+      solver_tol_,
+      solver_max_iter_,
+      bc_left_, bc_right_,
+      bc_bottom_, bc_top_,
+      bc_front_, bc_back_
     };
     RenderPresetManagerPanel(state, panel.components);
   };
@@ -1377,9 +1408,11 @@ void Application::RegisterPanelRenderers() {
   panel_registry_["source_term"] = [this](const PanelConfig& panel, bool) {
     SourceTermPanelState state{
       source_term_expr_,
-      input_width_
+      input_width_,
+      point_sources_
     };
     RenderSourceTermPanel(state, panel.components);
+    point_sources_ = state.point_sources;
   };
 
   panel_registry_["material_properties"] = [this](const PanelConfig& panel, bool) {
@@ -1489,6 +1522,7 @@ void Application::RegisterPanelRenderers() {
     AnimationExportPanelState state{
       frame_paths_,
       frame_times_,
+      viewer_,
       input_width_
     };
     RenderAnimationExportPanel(state, panel.components);
@@ -1755,7 +1789,14 @@ void Application::RenderMenuBar() {
       ImGui::EndMenu();
     }
     if (ImGui::MenuItem("Save Layout...", nullptr, false, layout_enabled)) {
-      // TODO: Open save dialog.
+      auto layoutDir = DockingContext::GetLayoutDirectory(exec_path_.parent_path());
+      auto savePath = FileDialog::SaveFile(
+          "Save Layout", layoutDir, "layout.json",
+          "JSON Files", {".json"});
+      if (savePath.has_value() && docking_ctx_ && docking_ctx_->GetRoot()) {
+        LayoutSerializer::SaveToFile(*docking_ctx_->GetRoot(),
+                                     savePath.value().string());
+      }
     }
     ImGui::EndMenu();
   }
@@ -1878,7 +1919,8 @@ void Application::ExecuteAction(AppAction action) {
         solver_mg_pre_smooth_, solver_mg_post_smooth_, solver_mg_coarse_iters_, solver_mg_max_levels_,
         thread_count_,
         metal_reduce_interval_, metal_tg_x_, metal_tg_y_,
-        time_start_, time_end_, time_frames_, output_path_,
+        time_start_, time_end_, time_frames_, discretization_index_,
+        time_integration_method_, output_path_,
         shared_state_, state_mutex_, viewer_,
         solver_manager_.ThreadPtr(),
         solver_manager_.CancelFlag(),
@@ -2665,16 +2707,10 @@ int Application::Run() {
     return 1;
   }
   
-  // Resolve paths
-  script_path_ = FindScriptPath(exec_path_);
-  cache_dir_ = EnsureLatexCacheDir(script_path_.empty() ? 
-      std::filesystem::current_path() : script_path_.parent_path().parent_path());
-  python_path_ = ResolvePythonPath(script_path_.empty() ? 
-      std::filesystem::current_path() : script_path_.parent_path().parent_path());
   ui_font_dir_ = FindUIFontDir(exec_path_);
-  
-  if (script_path_.empty()) {
-    AddLog(shared_state_, state_mutex_, "latex: render_latex.py not found");
+  {
+    const std::filesystem::path res_dir = FindMicroTeXResDir(exec_path_);
+    LatexRenderService::Instance().Init(res_dir.string());
   }
   
   // Initialize registries
@@ -2735,7 +2771,9 @@ void Application::ProcessFrame() {
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
-  
+
+  LatexRenderService::Instance().PollCompletedRenders();
+
   HandleTimeSeriesPlayback();
   
   RenderUI();

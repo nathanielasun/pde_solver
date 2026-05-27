@@ -776,9 +776,10 @@ kernel void time_step_first_order(const device float* grid [[buffer(0)]],
                                    constant float& by [[buffer(8)]],
                                    constant float& cx [[buffer(9)]],
                                    constant float& dyc [[buffer(10)]],
-                                   constant float& fval [[buffer(11)]],
-                                   constant float& ut_coeff [[buffer(12)]],
-                                   constant float& dt [[buffer(13)]],
+                                   constant float& center [[buffer(11)]],
+                                   constant float& fval [[buffer(12)]],
+                                   constant float& ut_coeff [[buffer(13)]],
+                                   constant float& dt [[buffer(14)]],
                                    uint2 tid [[thread_position_in_grid]]) {
   const DomainInfo domain = *domain_ptr;
   const DeviceBC left_bc = *left_ptr;
@@ -799,20 +800,68 @@ kernel void time_step_first_order(const device float* grid [[buffer(0)]],
   // Handle boundaries
   if (i == 0 || j == 0 || i == domain.nx - 1 || j == domain.ny - 1) {
     float value = grid[idx];
-    if (i == 0 && left_bc.kind == 0) {
-      value = left_bc.value.eval(domain.xmin, y);
-    } else if (i == domain.nx - 1 && right_bc.kind == 0) {
-      value = right_bc.value.eval(domain.xmax, y);
-    } else if (j == 0 && bottom_bc.kind == 0) {
-      value = bottom_bc.value.eval(x, domain.ymin);
-    } else if (j == domain.ny - 1 && top_bc.kind == 0) {
-      value = top_bc.value.eval(x, domain.ymax);
+    if (i == 0) {
+      if (left_bc.kind == 0) {
+        value = left_bc.value.eval(domain.xmin, y);
+      } else if (left_bc.kind == 1) {
+        const float g = left_bc.value.eval(domain.xmin, y);
+        value = grid[Index(1, j, domain.nx)] - domain.dx * g;
+      } else if (left_bc.kind == 2) {
+        const float alpha = left_bc.alpha.eval(domain.xmin, y);
+        const float beta = left_bc.beta.eval(domain.xmin, y);
+        const float gamma = left_bc.gamma.eval(domain.xmin, y);
+        const float denom = alpha + beta / domain.dx;
+        if (fabs(denom) > 1e-6f)
+          value = (gamma + (beta / domain.dx) * grid[Index(1, j, domain.nx)]) / denom;
+      }
+    } else if (i == domain.nx - 1) {
+      if (right_bc.kind == 0) {
+        value = right_bc.value.eval(domain.xmax, y);
+      } else if (right_bc.kind == 1) {
+        const float g = right_bc.value.eval(domain.xmax, y);
+        value = grid[Index(domain.nx - 2, j, domain.nx)] + domain.dx * g;
+      } else if (right_bc.kind == 2) {
+        const float alpha = right_bc.alpha.eval(domain.xmax, y);
+        const float beta = right_bc.beta.eval(domain.xmax, y);
+        const float gamma = right_bc.gamma.eval(domain.xmax, y);
+        const float denom = alpha + beta / domain.dx;
+        if (fabs(denom) > 1e-6f)
+          value = (gamma + (beta / domain.dx) * grid[Index(domain.nx - 2, j, domain.nx)]) / denom;
+      }
+    } else if (j == 0) {
+      if (bottom_bc.kind == 0) {
+        value = bottom_bc.value.eval(x, domain.ymin);
+      } else if (bottom_bc.kind == 1) {
+        const float g = bottom_bc.value.eval(x, domain.ymin);
+        value = grid[Index(i, 1, domain.nx)] - domain.dy * g;
+      } else if (bottom_bc.kind == 2) {
+        const float alpha = bottom_bc.alpha.eval(x, domain.ymin);
+        const float beta = bottom_bc.beta.eval(x, domain.ymin);
+        const float gamma = bottom_bc.gamma.eval(x, domain.ymin);
+        const float denom = alpha + beta / domain.dy;
+        if (fabs(denom) > 1e-6f)
+          value = (gamma + (beta / domain.dy) * grid[Index(i, 1, domain.nx)]) / denom;
+      }
+    } else if (j == domain.ny - 1) {
+      if (top_bc.kind == 0) {
+        value = top_bc.value.eval(x, domain.ymax);
+      } else if (top_bc.kind == 1) {
+        const float g = top_bc.value.eval(x, domain.ymax);
+        value = grid[Index(i, domain.ny - 2, domain.nx)] + domain.dy * g;
+      } else if (top_bc.kind == 2) {
+        const float alpha = top_bc.alpha.eval(x, domain.ymax);
+        const float beta = top_bc.beta.eval(x, domain.ymax);
+        const float gamma = top_bc.gamma.eval(x, domain.ymax);
+        const float denom = alpha + beta / domain.dy;
+        if (fabs(denom) > 1e-6f)
+          value = (gamma + (beta / domain.dy) * grid[Index(i, domain.ny - 2, domain.nx)]) / denom;
+      }
     }
     next[idx] = value;
     return;
   }
 
-  // Compute spatial operator L[u] = a*u_xx + b*u_yy + c*u_x + d*u_y + f
+  // Compute spatial operator L[u] = a*u_xx + b*u_yy + c*u_x + d*u_y + e*u + f
   // Using central differences: u_xx ≈ (u_right - 2u + u_left)/dx²
   const float u = grid[idx];
   const float u_left = grid[Index(i - 1, j, domain.nx)];
@@ -820,11 +869,10 @@ kernel void time_step_first_order(const device float* grid [[buffer(0)]],
   const float u_down = grid[Index(i, j - 1, domain.nx)];
   const float u_up = grid[Index(i, j + 1, domain.nx)];
 
-  // Include center term: -2*ax*u - 2*by*u for the Laplacian
-  const float laplacian = (ax + cx) * u_right + (ax - cx) * u_left +
-                          (by + dyc) * u_up + (by - dyc) * u_down
-                          - 2.0f * ax * u - 2.0f * by * u;
-  const float L_u = laplacian + fval;
+  // center = -2*ax - 2*by + e (precomputed on host)
+  const float L_u = (ax + cx) * u_right + (ax - cx) * u_left +
+                    (by + dyc) * u_up + (by - dyc) * u_down +
+                    center * u + fval;
 
   // u_t = -L[u] / ut_coeff
   const float u_t = -L_u / ut_coeff;
@@ -847,10 +895,11 @@ kernel void time_step_second_order(const device float* grid [[buffer(0)]],
                                     constant float& by [[buffer(9)]],
                                     constant float& cx [[buffer(10)]],
                                     constant float& dyc [[buffer(11)]],
-                                    constant float& fval [[buffer(12)]],
-                                    constant float& ut_coeff [[buffer(13)]],
-                                    constant float& utt_coeff [[buffer(14)]],
-                                    constant float& dt [[buffer(15)]],
+                                    constant float& center [[buffer(12)]],
+                                    constant float& fval [[buffer(13)]],
+                                    constant float& ut_coeff [[buffer(14)]],
+                                    constant float& utt_coeff [[buffer(15)]],
+                                    constant float& dt [[buffer(16)]],
                                     uint2 tid [[thread_position_in_grid]]) {
   const DomainInfo domain = *domain_ptr;
   const DeviceBC left_bc = *left_ptr;
@@ -871,21 +920,69 @@ kernel void time_step_second_order(const device float* grid [[buffer(0)]],
   // Handle boundaries
   if (i == 0 || j == 0 || i == domain.nx - 1 || j == domain.ny - 1) {
     float value = grid[idx];
-    if (i == 0 && left_bc.kind == 0) {
-      value = left_bc.value.eval(domain.xmin, y);
-    } else if (i == domain.nx - 1 && right_bc.kind == 0) {
-      value = right_bc.value.eval(domain.xmax, y);
-    } else if (j == 0 && bottom_bc.kind == 0) {
-      value = bottom_bc.value.eval(x, domain.ymin);
-    } else if (j == domain.ny - 1 && top_bc.kind == 0) {
-      value = top_bc.value.eval(x, domain.ymax);
+    if (i == 0) {
+      if (left_bc.kind == 0) {
+        value = left_bc.value.eval(domain.xmin, y);
+      } else if (left_bc.kind == 1) {
+        const float g = left_bc.value.eval(domain.xmin, y);
+        value = grid[Index(1, j, domain.nx)] - domain.dx * g;
+      } else if (left_bc.kind == 2) {
+        const float alpha = left_bc.alpha.eval(domain.xmin, y);
+        const float beta = left_bc.beta.eval(domain.xmin, y);
+        const float gamma = left_bc.gamma.eval(domain.xmin, y);
+        const float denom = alpha + beta / domain.dx;
+        if (fabs(denom) > 1e-6f)
+          value = (gamma + (beta / domain.dx) * grid[Index(1, j, domain.nx)]) / denom;
+      }
+    } else if (i == domain.nx - 1) {
+      if (right_bc.kind == 0) {
+        value = right_bc.value.eval(domain.xmax, y);
+      } else if (right_bc.kind == 1) {
+        const float g = right_bc.value.eval(domain.xmax, y);
+        value = grid[Index(domain.nx - 2, j, domain.nx)] + domain.dx * g;
+      } else if (right_bc.kind == 2) {
+        const float alpha = right_bc.alpha.eval(domain.xmax, y);
+        const float beta = right_bc.beta.eval(domain.xmax, y);
+        const float gamma = right_bc.gamma.eval(domain.xmax, y);
+        const float denom = alpha + beta / domain.dx;
+        if (fabs(denom) > 1e-6f)
+          value = (gamma + (beta / domain.dx) * grid[Index(domain.nx - 2, j, domain.nx)]) / denom;
+      }
+    } else if (j == 0) {
+      if (bottom_bc.kind == 0) {
+        value = bottom_bc.value.eval(x, domain.ymin);
+      } else if (bottom_bc.kind == 1) {
+        const float g = bottom_bc.value.eval(x, domain.ymin);
+        value = grid[Index(i, 1, domain.nx)] - domain.dy * g;
+      } else if (bottom_bc.kind == 2) {
+        const float alpha = bottom_bc.alpha.eval(x, domain.ymin);
+        const float beta = bottom_bc.beta.eval(x, domain.ymin);
+        const float gamma = bottom_bc.gamma.eval(x, domain.ymin);
+        const float denom = alpha + beta / domain.dy;
+        if (fabs(denom) > 1e-6f)
+          value = (gamma + (beta / domain.dy) * grid[Index(i, 1, domain.nx)]) / denom;
+      }
+    } else if (j == domain.ny - 1) {
+      if (top_bc.kind == 0) {
+        value = top_bc.value.eval(x, domain.ymax);
+      } else if (top_bc.kind == 1) {
+        const float g = top_bc.value.eval(x, domain.ymax);
+        value = grid[Index(i, domain.ny - 2, domain.nx)] + domain.dy * g;
+      } else if (top_bc.kind == 2) {
+        const float alpha = top_bc.alpha.eval(x, domain.ymax);
+        const float beta = top_bc.beta.eval(x, domain.ymax);
+        const float gamma = top_bc.gamma.eval(x, domain.ymax);
+        const float denom = alpha + beta / domain.dy;
+        if (fabs(denom) > 1e-6f)
+          value = (gamma + (beta / domain.dy) * grid[Index(i, domain.ny - 2, domain.nx)]) / denom;
+      }
     }
     next[idx] = value;
     velocity[idx] = 0.0f;
     return;
   }
 
-  // Compute spatial operator L[u] = a*u_xx + b*u_yy + c*u_x + d*u_y + f
+  // Compute spatial operator L[u] = a*u_xx + b*u_yy + c*u_x + d*u_y + e*u + f
   // Using central differences: u_xx ≈ (u_right - 2u + u_left)/dx²
   const float u = grid[idx];
   const float u_left = grid[Index(i - 1, j, domain.nx)];
@@ -893,11 +990,10 @@ kernel void time_step_second_order(const device float* grid [[buffer(0)]],
   const float u_down = grid[Index(i, j - 1, domain.nx)];
   const float u_up = grid[Index(i, j + 1, domain.nx)];
 
-  // Include center term: -2*ax*u - 2*by*u for the Laplacian
-  const float laplacian = (ax + cx) * u_right + (ax - cx) * u_left +
-                          (by + dyc) * u_up + (by - dyc) * u_down
-                          - 2.0f * ax * u - 2.0f * by * u;
-  const float L_u = laplacian + fval;
+  // center = -2*ax - 2*by + e (precomputed on host)
+  const float L_u = (ax + cx) * u_right + (ax - cx) * u_left +
+                    (by + dyc) * u_up + (by - dyc) * u_down +
+                    center * u + fval;
 
   // acceleration = -(L[u] + ut_coeff * velocity) / utt_coeff
   const float v = velocity[idx];

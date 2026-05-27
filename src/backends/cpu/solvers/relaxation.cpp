@@ -17,6 +17,7 @@
 #include "embedded_boundary.h"
 #include "expression_eval.h"
 #include "residual.h"
+#include "nonlinear_derivatives.h"
 
 namespace {
 bool IsDirichlet(const BoundaryCondition& bc) { return bc.kind == BCKind::Dirichlet; }
@@ -124,6 +125,7 @@ SolveOutput SolveGaussSeidelSor2D(const SolveInput& input,
 
   const bool has_integrals = !input.integrals.empty();
   const bool has_nonlinear = !input.nonlinear.empty();
+  const bool has_nonlinear_deriv = !input.nonlinear_derivatives.empty();
 
   std::mutex progress_mutex;
   auto emit_progress = [&](const std::string& phase, double value) {
@@ -214,6 +216,10 @@ SolveOutput SolveGaussSeidelSor2D(const SolveInput& input,
             has_integrals && integral_weights ? integral_weights->at(static_cast<size_t>(idx)) * integral_value : 0.0;
         const double nonlinear_term =
             has_nonlinear ? EvalNonlinear(input.nonlinear, old_u) : 0.0;
+        const double nonlinear_deriv_term =
+            has_nonlinear_deriv
+                ? AccumulateNonlinearDerivatives(input.nonlinear_derivatives, grid, i, j, nx, ny, dx, dy)
+                : 0.0;
 
         double laplacian_contrib;
         if (d.coord_system == CoordinateSystem::Cartesian) {
@@ -272,7 +278,7 @@ SolveOutput SolveGaussSeidelSor2D(const SolveInput& input,
           fourth_contrib += b4_val * (u_yyyy - c4y * old_u);
         }
 
-        const double rhs = -(f_val + integral_term + nonlinear_term) -
+        const double rhs = -(f_val + integral_term + nonlinear_term + nonlinear_deriv_term) -
                            (laplacian_contrib + mixed_contrib + third_contrib + fourth_contrib);
         const double jacobi_update = rhs / center;
         const double updated = (1.0 - omega) * old_u + omega * jacobi_update;
@@ -372,6 +378,7 @@ SolveOutput SolveJacobi2D(const SolveInput& input,
   const int max_iter = std::max(1, input.solver.max_iter);
   const bool has_integrals = !input.integrals.empty();
   const bool has_nonlinear = !input.nonlinear.empty();
+  const bool has_nonlinear_deriv = !input.nonlinear_derivatives.empty();
 
   std::mutex progress_mutex;
   auto emit_progress = [&](const std::string& phase, double value) {
@@ -468,6 +475,10 @@ SolveOutput SolveJacobi2D(const SolveInput& input,
             has_integrals && integral_weights ? integral_weights->at(static_cast<size_t>(idx)) * integral_value : 0.0;
         const double nonlinear_term =
             has_nonlinear ? EvalNonlinear(input.nonlinear, old_u) : 0.0;
+        const double nonlinear_deriv_term =
+            has_nonlinear_deriv
+                ? AccumulateNonlinearDerivatives(input.nonlinear_derivatives, grid, i, j, nx, ny, dx, dy)
+                : 0.0;
 
         double laplacian_contrib;
         if (d.coord_system == CoordinateSystem::Cartesian) {
@@ -526,7 +537,7 @@ SolveOutput SolveJacobi2D(const SolveInput& input,
           fourth_contrib += b4_val * (u_yyyy - c4y * old_u);
         }
 
-        const double rhs = -(f_val + integral_term + nonlinear_term) -
+        const double rhs = -(f_val + integral_term + nonlinear_term + nonlinear_deriv_term) -
                            (laplacian_contrib + mixed_contrib + third_contrib + fourth_contrib);
         const double updated = rhs / center;
         next[idx] = updated;

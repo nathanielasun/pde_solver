@@ -15,6 +15,9 @@
 #include <optional>
 #include <chrono>
 
+#include "latex/latex_texture.h"
+#include "latex/latex_preview_draw.h"
+
 // Forward declarations
 struct BoundaryInput;
 struct Preferences;
@@ -33,29 +36,12 @@ bool BuildBoundarySpec(const BoundaryInput& left, const BoundaryInput& right,
                        std::string* spec, std::string* error);
 bool SetBoundaryFromSpec(const std::string& spec, BoundaryInput* bc);
 
-// LaTeX texture structure
-struct LatexTexture {
-  std::string source;
-  std::string last_rendered;
-  std::string error;
-  std::string color;
-  unsigned int texture = 0;  // GLuint
-  int width = 0;
-  int height = 0;
-  int font_size = 18;
-  bool dirty = false;
-  std::chrono::steady_clock::time_point last_edit;
-};
+// LaTeX rendering (async in-process; see latex/latex_render_service.h)
+#include "latex/latex_render_service.h"
 
-// LaTeX rendering helpers
-void UpdateLatexTexture(LatexTexture& tex, const std::string& source,
-                       const std::string& python_path, const std::filesystem::path& script_path,
-                       const std::filesystem::path& cache_dir, const std::string& color, int font_size);
 bool RenderLatexToPng(const std::string& python, const std::filesystem::path& script,
                      const std::string& latex, const std::filesystem::path& out_path,
                      const std::string& color, int font_size, std::string* error);
-bool LoadTextureFromFile(const std::filesystem::path& path, unsigned int* texture, int* width,
-                        int* height, std::string* error);
 
 // Process execution
 bool RunProcess(const std::vector<std::string>& args, std::string* output);
@@ -71,7 +57,6 @@ int MethodToIndex(SolveMethod method);
 // Drawing helpers
 void DrawGimbal(GlViewer& viewer, const ImVec2& top_right, float size, ImGuiIO& io);
 void DrawGimbalForeground(GlViewer& viewer, const ImVec2& top_right, float size, ImGuiIO& io);
-void DrawLatexPreview(const LatexTexture& tex, float max_width, float max_height);
 void DrawAxisLabels(const GlViewer& viewer, const ImVec2& image_min,
                     const ImVec2& image_max, const ImVec4& color);
 

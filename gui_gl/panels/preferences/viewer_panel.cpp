@@ -2,10 +2,6 @@
 #include "ui_helpers.h"
 #include "styles/ui_style.h"
 #include "imgui.h"
-// #region agent log
-#include <fstream>
-#include <chrono>
-// #endregion agent log
 
 namespace {
 
@@ -16,22 +12,6 @@ std::vector<std::string> DefaultComponents() {
 void RenderViewerControls(ViewerPanelState& state) {
   if (ImGui::Checkbox("Orthographic projection", &state.use_ortho)) {
     state.viewer.SetOrthographic(state.use_ortho);
-    // #region agent log
-    {
-      std::ofstream f("/Users/nathaniel.sun/Desktop/programming/cursor/.cursor/debug.log",
-                      std::ios::app);
-      if (f) {
-        const auto ts = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::chrono::system_clock::now().time_since_epoch())
-                            .count();
-        f << "{\"sessionId\":\"debug-session\",\"runId\":\"run9\",\"hypothesisId\":\"T\","
-             "\"location\":\"gui_gl/panels/viewer_panel.cpp:RenderViewerControls\","
-             "\"message\":\"Calling viewer.FitToView from orthographic toggle\","
-             "\"data\":{\"use_ortho\":"
-          << (state.use_ortho ? "true" : "false") << "},\"timestamp\":" << ts << "}\n";
-      }
-    }
-    // #endregion agent log
     state.viewer.FitToView();
     state.point_scale = 1.0f;
   }

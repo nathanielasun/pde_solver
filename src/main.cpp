@@ -34,6 +34,9 @@
 #include "run_metadata.h"
 #include "run_summary.h"
 #include "self_test.h"
+#include "residual_operator.h"
+#include "solve_status.h"
+#include "backend_capability_matrix.h"
 #include "solver.h"
 #include "solver_tokens.h"
 #include "input_parse.h"
@@ -91,6 +94,8 @@ void PrintUsage() {
       << "Optional: --format vtk|vti (output format, default: vtk)\n"
       << "Optional: --validate (parse inputs and exit without solving)\n"
       << "Optional: --dump-operator[=json] (print parsed operator)\n"
+      << "Optional: --discretization fd|fv (finite difference or finite volume)\n"
+      << "Optional: --stability-check (estimate CFL limits without solving)\n"
       << "Optional: --dump-metadata[=<file>] (print or export run metadata)\n"
       << "Optional: --dump-summary[=<file>] (print or export run summary)\n"
       << "Optional: --dataset-index <dir> (write dataset index + stats)\n"
@@ -1590,11 +1595,14 @@ BatchRunResult RunBatchEntry(const BatchRunEntry& entry, const BatchSpec& spec) 
   const std::string backend_token = config.backend.empty() ? "auto" : config.backend;
   BackendKind backend = ParseBackendKind(backend_token);
 
+  const ProblemClassification batch_classification = ClassifyProblem(parse_result);
+
   SolveInput input;
   input.pde = parse_result.coeffs;
   input.integrals = parse_result.integrals;
   input.nonlinear = parse_result.nonlinear;
   input.nonlinear_derivatives = parse_result.nonlinear_derivatives;
+  ApplyClassificationToInput(batch_classification, &input);
   input.domain = domain;
   input.bc = bc;
   std::string shape_expr = NormalizeShapeExpression(config.domain_shape);
@@ -1940,6 +1948,7 @@ BatchRunResult RunBatchEntry(const BatchRunEntry& entry, const BatchSpec& spec) 
   summary.residual_iters = output.residual_iters;
   summary.residual_l2_history = output.residual_l2_history;
   summary.residual_linf_history = output.residual_linf_history;
+  PopulateNonlinearPipelineSummary(input, &summary);
   std::string summary_error;
   if (!WriteRunSummarySidecar(final_path, summary, &summary_error)) {
     std::cerr << "summary warning: " << summary_error << "\n";
@@ -2532,6 +2541,9 @@ int main(int argc, char** argv) {
   SolveMethod method = SolveMethod::Jacobi;
   TimeConfig time_config;
   bool validate_only = false;
+  bool stability_check_only = false;
+  Discretization discretization = Discretization::FiniteDifference;
+  bool discretization_set = false;
   bool dump_operator = false;
   bool dump_operator_json = false;
   bool dump_metadata = false;
@@ -2919,6 +2931,28 @@ int main(int argc, char** argv) {
     }
     if (arg == "--validate") {
       validate_only = true;
+      continue;
+    }
+    if (arg == "--stability-check") {
+      stability_check_only = true;
+      continue;
+    }
+    if (arg == "--discretization") {
+      if (i + 1 >= argc) {
+        std::cerr << "--discretization requires fd or fv\n";
+        return 1;
+      }
+      const std::string disc = argv[++i];
+      if (disc == "fv") {
+        discretization = Discretization::FiniteVolume;
+        discretization_set = true;
+      } else if (disc == "fd") {
+        discretization = Discretization::FiniteDifference;
+        discretization_set = true;
+      } else {
+        std::cerr << "unknown discretization: " << disc << "\n";
+        return 1;
+      }
       continue;
     }
     if (arg == "--dump-operator") {
@@ -3457,11 +3491,36 @@ int main(int argc, char** argv) {
     out_dir_resolved = ApplyOutputPattern(out_dir, ctx);
   }
 
+  const ProblemClassification classification = ClassifyProblem(parse_result);
+
   if (dump_operator) {
     if (dump_operator_json) {
       PrintOperatorDumpJson(parse_result.op);
     } else {
       PrintOperatorDumpText(parse_result.op);
+    }
+  }
+
+  if (dump_operator) {
+    if (dump_operator_json) {
+      std::cout << "{\"classification\":{"
+                << "\"problem_form\":\"" << ProblemFormToString(classification.form) << "\""
+                << ",\"recommended_discretization\":\""
+                << DiscretizationToString(classification.recommended_discretization) << "\""
+                << ",\"conservation_flux\":\"" << JsonEscape(classification.flux_latex) << "\""
+                << ",\"note\":\"" << JsonEscape(classification.note) << "\""
+                << "}}\n";
+    } else {
+      std::cout << "Classification:\n"
+                << "  problem_form: " << ProblemFormToString(classification.form) << "\n"
+                << "  recommended_discretization: "
+                << DiscretizationToString(classification.recommended_discretization) << "\n";
+      if (!classification.flux_latex.empty()) {
+        std::cout << "  conservation_flux: " << classification.flux_latex << "\n";
+      }
+      if (!classification.note.empty()) {
+        std::cout << "  classification_note: " << classification.note << "\n";
+      }
     }
   }
 
@@ -3509,7 +3568,68 @@ int main(int argc, char** argv) {
     if (!bc_str.empty() && !domain_str.empty()) {
       std::cout << "Boundary conditions: ok\n";
     }
+    if (stability_check_only) {
+      SolveInput probe;
+      probe.pde = parse_result.coeffs;
+      probe.nonlinear_derivatives = parse_result.nonlinear_derivatives;
+      probe.domain = domain;
+      probe.time = time_config;
+      ApplyClassificationToInput(classification, &probe);
+      if (discretization_set) {
+        probe.discretization = discretization;
+      }
+      if (discretization_set && probe.discretization == Discretization::FiniteVolume &&
+          probe.problem_form != ProblemForm::ConservationLaw) {
+        std::cerr << "warning: FV discretization selected for non-conservation-law problem\n";
+      }
+      std::string reason;
+      const bool ok = BackendSupportsInput(backend, probe, &reason);
+      const double max_diff = std::max(std::abs(probe.pde.a), std::abs(probe.pde.b));
+      const double max_adv = std::max(std::abs(probe.pde.c), std::abs(probe.pde.d));
+      std::cout << "{"
+                << "\"status\":\"" << (ok ? "ok" : "unsupported") << "\""
+                << ",\"problem_form\":\"" << ProblemFormToString(probe.problem_form) << "\""
+                << ",\"discretization\":\"" << DiscretizationToString(probe.discretization) << "\""
+                << ",\"max_diffusion\":" << max_diff
+                << ",\"max_advection\":" << max_adv
+                << ",\"backend\":\"" << BackendKindName(backend) << "\""
+                << ",\"note\":\"" << JsonEscape(reason) << "\""
+                << "}\n";
+      return ok ? SolveStatusExitCode(SolveStatus::Ok)
+                : SolveStatusExitCode(SolveStatus::UnsupportedFeature);
+    }
+    if (discretization_set && discretization == Discretization::FiniteVolume &&
+        classification.form != ProblemForm::ConservationLaw) {
+      std::cerr << "warning: FV discretization may be inappropriate for this problem form\n";
+    }
     return 0;
+  }
+
+  if (stability_check_only) {
+    SolveInput probe;
+    probe.pde = parse_result.coeffs;
+    probe.nonlinear_derivatives = parse_result.nonlinear_derivatives;
+    probe.domain = domain;
+    probe.time = time_config;
+    ApplyClassificationToInput(classification, &probe);
+    if (discretization_set) {
+      probe.discretization = discretization;
+    }
+    std::string reason;
+    const bool ok = BackendSupportsInput(backend, probe, &reason);
+    const double max_diff = std::max(std::abs(probe.pde.a), std::abs(probe.pde.b));
+    const double max_adv = std::max(std::abs(probe.pde.c), std::abs(probe.pde.d));
+    std::cout << "{"
+              << "\"status\":\"" << (ok ? "ok" : "unsupported") << "\""
+              << ",\"problem_form\":\"" << ProblemFormToString(probe.problem_form) << "\""
+              << ",\"discretization\":\"" << DiscretizationToString(probe.discretization) << "\""
+              << ",\"max_diffusion\":" << max_diff
+              << ",\"max_advection\":" << max_adv
+              << ",\"backend\":\"" << BackendKindName(backend) << "\""
+              << ",\"note\":\"" << JsonEscape(reason) << "\""
+              << "}\n";
+    return ok ? SolveStatusExitCode(SolveStatus::Ok)
+              : SolveStatusExitCode(SolveStatus::UnsupportedFeature);
   }
 
   SolveInput input;
@@ -3517,6 +3637,10 @@ int main(int argc, char** argv) {
   input.integrals = parse_result.integrals;
   input.nonlinear = parse_result.nonlinear;
   input.nonlinear_derivatives = parse_result.nonlinear_derivatives;
+  ApplyClassificationToInput(classification, &input);
+  if (discretization_set) {
+    input.discretization = discretization;
+  }
   input.domain = domain;
   input.bc = bc;
   input.domain_shape = shape_str;
@@ -3785,6 +3909,7 @@ int main(int argc, char** argv) {
           summary.monitor_blowup_ratio = monitor.blowup_ratio;
           summary.monitor_blowup_max = monitor.blowup_max;
         }
+        PopulateNonlinearPipelineSummary(input, &summary);
         std::string summary_error;
         if (!WriteRunSummarySidecar(frame_path, summary, &summary_error)) {
           std::cerr << "summary warning: " << summary_error << "\n";
@@ -4048,6 +4173,7 @@ int main(int argc, char** argv) {
     summary.residual_iters = output.residual_iters;
     summary.residual_l2_history = output.residual_l2_history;
     summary.residual_linf_history = output.residual_linf_history;
+    PopulateNonlinearPipelineSummary(input, &summary);
     std::string summary_error;
     if (!WriteRunSummarySidecar(final_path, summary, &summary_error)) {
       std::cerr << "summary warning: " << summary_error << "\n";

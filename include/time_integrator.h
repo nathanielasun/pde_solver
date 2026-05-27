@@ -50,6 +50,11 @@ inline int GetOrder(TimeIntegrator method) {
   }
 }
 
+// RHS function type: computes du/dt given current state
+// Returns the right-hand side of du/dt = F(t, u)
+using RHSFunction = std::function<void(double t, const std::vector<double>& u,
+                                        std::vector<double>* dudt)>;
+
 // Time integration configuration
 struct TimeIntegratorConfig {
   TimeIntegrator method = TimeIntegrator::ForwardEuler;
@@ -70,12 +75,11 @@ struct TimeIntegratorConfig {
   // Implicit solver settings (for backward Euler, Crank-Nicolson)
   int implicit_max_iter = 100;
   double implicit_tol = 1e-8;
-};
 
-// RHS function type: computes du/dt given current state
-// Returns the right-hand side of du/dt = F(t, u)
-using RHSFunction = std::function<void(double t, const std::vector<double>& u,
-                                        std::vector<double>* dudt)>;
+  // IMEX split (required when method == IMEX)
+  RHSFunction rhs_explicit;
+  RHSFunction rhs_implicit;
+};
 
 // Time step result
 struct TimeStepResult {

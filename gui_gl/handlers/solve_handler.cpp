@@ -4,7 +4,10 @@
 #include "conserved_monitor.h"
 #include "latex_parser.h"
 #include "input_parse.h"
+#include "backend_capability_matrix.h"
+#include "residual_operator.h"
 #include "solver.h"
+#include "time_integrator.h"
 #include "vtk_io.h"
 #include "solve_service.h"
 #include "run_metadata.h"
@@ -14,7 +17,6 @@
 #ifdef USE_METAL
 #include "MetalSolve.h"
 #endif
-#include <fstream>
 #include <chrono>
 #include <filesystem>
 #include <algorithm>
@@ -116,23 +118,6 @@ RunConfig BuildRunConfigForHandler(const SolveHandlerState& state,
 }  // namespace
 
 void LaunchSolve(SolveHandlerState& handler_state) {
-  // #region agent log
-  {
-    std::ofstream f("/Users/nathaniel.sun/Desktop/programming/cursor/.cursor/debug.log",
-                    std::ios::app);
-    if (f) {
-      const auto ts = std::chrono::duration_cast<std::chrono::milliseconds>(
-                          std::chrono::system_clock::now().time_since_epoch())
-                          .count();
-      f << "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\","
-           "\"location\":\"gui_gl/handlers/solve_handler.cpp:LaunchSolve\",\"message\":\"Enter\","
-           "\"data\":{\"solver_thread_ptr_null\":" << (handler_state.solver_thread ? "false" : "true")
-        << ",\"solver_thread_joinable\":"
-        << ((handler_state.solver_thread && handler_state.solver_thread->joinable()) ? "true" : "false")
-        << "},\"timestamp\":" << ts << "}\n";
-    }
-  }
-  // #endregion agent log
   if (handler_state.solver_thread && handler_state.solver_thread->joinable()) {
     handler_state.solver_thread->join();
   }
@@ -425,6 +410,13 @@ void LaunchSolve(SolveHandlerState& handler_state) {
   input.integrals = parse_result.integrals;
   input.nonlinear = parse_result.nonlinear;
   input.nonlinear_derivatives = parse_result.nonlinear_derivatives;
+  {
+    ProblemClassification classification = ClassifyProblem(parse_result);
+    ApplyClassificationToInput(classification, &input);
+  }
+  if (handler_state.discretization_index == 1) {
+    input.discretization = Discretization::FiniteVolume;
+  }
   input.domain = domain;
   input.bc = bc;
   input.solver.max_iter = handler_state.solver_max_iter;
@@ -471,9 +463,36 @@ void LaunchSolve(SolveHandlerState& handler_state) {
     input.time.t_end = handler_state.time_end;
     input.time.frames = handler_state.time_frames;
     input.time.dt = dt;
+    switch (handler_state.time_integration_method) {
+      case TimeIntegrationMethod::ForwardEuler:
+        input.time.integrator = TimeIntegrator::ForwardEuler;
+        break;
+      case TimeIntegrationMethod::BackwardEuler:
+        input.time.integrator = TimeIntegrator::BackwardEuler;
+        break;
+      case TimeIntegrationMethod::CrankNicolson:
+        input.time.integrator = TimeIntegrator::CrankNicolson;
+        break;
+      case TimeIntegrationMethod::RK2:
+        input.time.integrator = TimeIntegrator::RK2;
+        break;
+      case TimeIntegrationMethod::RK4:
+        input.time.integrator = TimeIntegrator::RK4;
+        break;
+      case TimeIntegrationMethod::BDF2:
+        input.time.integrator = TimeIntegrator::BackwardEuler;
+        break;
+    }
   }
 
   BackendKind requested = BackendFromIndex(handler_state.backend_index);
+  {
+    std::string cap_reason;
+    if (!BackendSupportsInput(requested, input, &cap_reason)) {
+      handler_state.report_status("backend unsupported: " + cap_reason);
+      AddLog(handler_state.state, handler_state.state_mutex, "capability: " + cap_reason);
+    }
+  }
 
   std::string warning;
   std::filesystem::path resolved_output = ResolveOutputPath(handler_state.output_path, &warning);
@@ -495,20 +514,6 @@ void LaunchSolve(SolveHandlerState& handler_state) {
 
   if (handler_state.solver_thread) {
     *handler_state.solver_thread = std::thread([=, &state = handler_state.state, &state_mutex = handler_state.state_mutex]() {
-      // #region agent log
-      {
-        std::ofstream f("/Users/nathaniel.sun/Desktop/programming/cursor/.cursor/debug.log",
-                        std::ios::app);
-        if (f) {
-          const auto ts = std::chrono::duration_cast<std::chrono::milliseconds>(
-                              std::chrono::system_clock::now().time_since_epoch())
-                              .count();
-          f << "{\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\","
-               "\"location\":\"gui_gl/handlers/solve_handler.cpp:solver_thread\",\"message\":\"ThreadStarted\","
-               "\"data\":{},\"timestamp\":" << ts << "}\n";
-        }
-      }
-      // #endregion agent log
     const auto start_time = std::chrono::steady_clock::now();
     auto finalize = [&](SolveResult result) {
       const auto end_time = std::chrono::steady_clock::now();

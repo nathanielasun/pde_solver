@@ -53,6 +53,7 @@ struct Token {
     Pow,
     LParen,
     RParen,
+    Comma,
     End,
   };
 
@@ -259,14 +260,75 @@ bool ParseCommand(const std::string& input, size_t* index, std::string* output,
     return true;
   }
 
-  const std::string func = cmd == "ln" ? "log" : cmd;
-  if (func == "sin" || func == "cos" || func == "tan" || func == "exp" || func == "log" ||
-      func == "abs") {
+  // Map LaTeX command to function name (normalize aliases)
+  std::string func = cmd;
+  if (cmd == "ln") func = "log";
+  else if (cmd == "arcsin") func = "asin";
+  else if (cmd == "arccos") func = "acos";
+  else if (cmd == "arctan") func = "atan";
+  else if (cmd == "operatorname") {
+    // Handle \operatorname{func} style
+    SkipSpaces(input, index);
+    std::string op_name;
+    if (!ParseGroup(input, index, '{', '}', &op_name, error)) {
+      return false;
+    }
+    func = ToLower(op_name);
+  }
+
+  // Supported functions (single argument)
+  if (func == "sin" || func == "cos" || func == "tan" ||
+      func == "sinh" || func == "cosh" || func == "tanh" ||
+      func == "asin" || func == "acos" || func == "atan" ||
+      func == "exp" || func == "log" || func == "abs" ||
+      func == "floor" || func == "ceil" || func == "round" ||
+      func == "sign" || func == "sgn" || func == "erf") {
     std::string arg;
     if (!ParseLatexArgument(input, index, &arg, error)) {
       return false;
     }
+    // Normalize sgn to sign
+    if (func == "sgn") func = "sign";
     *output = func + "(" + arg + ")";
+    return true;
+  }
+
+  // Two-argument functions: min, max, atan2, pow
+  if (func == "min" || func == "max" || func == "atan2" || func == "pow") {
+    SkipSpaces(input, index);
+    std::string group;
+    if (*index < input.size() && input[*index] == '{') {
+      if (!ParseGroup(input, index, '{', '}', &group, error)) {
+        return false;
+      }
+    } else if (*index < input.size() && input[*index] == '(') {
+      if (!ParseGroup(input, index, '(', ')', &group, error)) {
+        return false;
+      }
+    } else {
+      if (error) *error = "expected arguments for " + func;
+      return false;
+    }
+    // Find comma separator
+    int depth = 0;
+    size_t comma_pos = std::string::npos;
+    for (size_t i = 0; i < group.size(); ++i) {
+      if (group[i] == '{' || group[i] == '(') ++depth;
+      else if (group[i] == '}' || group[i] == ')') --depth;
+      else if (group[i] == ',' && depth == 0) {
+        comma_pos = i;
+        break;
+      }
+    }
+    if (comma_pos == std::string::npos) {
+      if (error) *error = func + " requires two arguments separated by comma";
+      return false;
+    }
+    std::string arg1 = ConvertLatexToInfix(group.substr(0, comma_pos), error);
+    if (error && !error->empty()) return false;
+    std::string arg2 = ConvertLatexToInfix(group.substr(comma_pos + 1), error);
+    if (error && !error->empty()) return false;
+    *output = func + "(" + arg1 + "," + arg2 + ")";
     return true;
   }
 
@@ -388,6 +450,11 @@ std::vector<Token> Tokenize(const std::string& text, std::string* error) {
     }
     if (ch == ')') {
       tokens.push_back({Token::Type::RParen, 0.0, {}});
+      ++i;
+      continue;
+    }
+    if (ch == ',') {
+      tokens.push_back({Token::Type::Comma, 0.0, {}});
       ++i;
       continue;
     }
@@ -676,6 +743,19 @@ class Parser {
       if (!arg) {
         return nullptr;
       }
+
+      // Check for two-argument functions (comma-separated)
+      std::unique_ptr<Node> arg2 = nullptr;
+      if (name == "min" || name == "max" || name == "atan2" || name == "pow") {
+        // Expect comma followed by second argument
+        if (Match(Token::Type::Comma)) {
+          arg2 = ParseExpression(error);
+          if (!arg2) {
+            return nullptr;
+          }
+        }
+      }
+
       if (!Match(Token::Type::RParen)) {
         if (error) {
           *error = "missing closing parenthesis for function";
@@ -686,6 +766,7 @@ class Parser {
       node->type = Node::Type::Func;
       node->func = name;
       node->left = std::move(arg);
+      node->right = std::move(arg2);
       return node;
     }
     if (Match(Token::Type::LParen)) {
@@ -821,45 +902,74 @@ double ExpressionEvaluator::EvalNode(const Node* node, double x, double y, doubl
       return -EvalNode(node->left.get(), x, y, z, t);
     case Node::Type::Func: {
       const double v = EvalNode(node->left.get(), x, y, z, t);
-      if (node->func == "sin") {
-        return std::sin(v);
-      }
-      if (node->func == "cos") {
-        return std::cos(v);
-      }
-      if (node->func == "tan") {
-        // Check for singularities at odd multiples of pi/2
+      const std::string& func = node->func;
+
+      // Basic trigonometric functions
+      if (func == "sin") return std::sin(v);
+      if (func == "cos") return std::cos(v);
+      if (func == "tan") {
         const double cos_v = std::cos(v);
         if (std::abs(cos_v) < pde::kSafeDivEps) {
           return std::numeric_limits<double>::quiet_NaN();
         }
         return std::tan(v);
       }
-      if (node->func == "exp") {
-        // Prevent overflow
-        if (v > kExpOverflowLimit) {
-          return std::numeric_limits<double>::infinity();
-        }
-        if (v < -kExpOverflowLimit) {
-          return 0.0;  // Underflow to zero is safe
-        }
+
+      // Hyperbolic functions
+      if (func == "sinh") return std::sinh(v);
+      if (func == "cosh") return std::cosh(v);
+      if (func == "tanh") return std::tanh(v);
+
+      // Inverse trigonometric functions
+      if (func == "asin") {
+        if (v < -1.0 || v > 1.0) return std::numeric_limits<double>::quiet_NaN();
+        return std::asin(v);
+      }
+      if (func == "acos") {
+        if (v < -1.0 || v > 1.0) return std::numeric_limits<double>::quiet_NaN();
+        return std::acos(v);
+      }
+      if (func == "atan") return std::atan(v);
+
+      // Exponential and logarithmic functions
+      if (func == "exp") {
+        if (v > kExpOverflowLimit) return std::numeric_limits<double>::infinity();
+        if (v < -kExpOverflowLimit) return 0.0;
         return std::exp(v);
       }
-      if (node->func == "log") {
-        if (v <= 0.0) {
-          return std::numeric_limits<double>::quiet_NaN();
-        }
+      if (func == "log") {
+        if (v <= 0.0) return std::numeric_limits<double>::quiet_NaN();
         return std::log(v);
       }
-      if (node->func == "sqrt") {
-        if (v < 0.0) {
-          return std::numeric_limits<double>::quiet_NaN();
-        }
+      if (func == "sqrt") {
+        if (v < 0.0) return std::numeric_limits<double>::quiet_NaN();
         return std::sqrt(v);
       }
-      if (node->func == "abs") {
-        return std::abs(v);
+
+      // Rounding functions
+      if (func == "floor") return std::floor(v);
+      if (func == "ceil") return std::ceil(v);
+      if (func == "round") return std::round(v);
+
+      // Other functions
+      if (func == "abs") return std::abs(v);
+      if (func == "sign") return (v > 0.0) ? 1.0 : ((v < 0.0) ? -1.0 : 0.0);
+      if (func == "erf") return std::erf(v);
+
+      // Two-argument functions (second arg in right child)
+      if (func == "min" || func == "max" || func == "atan2" || func == "pow") {
+        const double v2 = node->right ? EvalNode(node->right.get(), x, y, z, t) : 0.0;
+        if (func == "min") return std::min(v, v2);
+        if (func == "max") return std::max(v, v2);
+        if (func == "atan2") return std::atan2(v, v2);
+        if (func == "pow") {
+          if (v < 0.0 && std::floor(v2) != v2) {
+            return std::numeric_limits<double>::quiet_NaN();
+          }
+          return std::pow(v, v2);
+        }
       }
+
       return 0.0;
     }
     default:

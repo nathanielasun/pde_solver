@@ -34,39 +34,43 @@ struct ErrorInfo {
   bool is_critical = true;
 };
 
-// Color preferences structure
+// Color preferences structure - Modern 2025 Design
 struct ColorPreferences {
   // Theme preset: 0=Dark, 1=Light, 2=HighContrast, 3=Custom
   int theme_preset = 0;
-  
-  // Core colors (ImGui style colors)
-  ImVec4 window_bg = ImVec4(0.15f, 0.15f, 0.15f, 1.0f);
-  ImVec4 panel_bg = ImVec4(0.20f, 0.20f, 0.20f, 1.0f);
-  ImVec4 input_bg = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
-  ImVec4 text_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-  ImVec4 text_disabled = ImVec4(0.50f, 0.50f, 0.50f, 1.0f);
-  ImVec4 border_color = ImVec4(0.43f, 0.43f, 0.50f, 0.50f);
-  
-  // Accent colors
-  ImVec4 accent_primary = ImVec4(0.26f, 0.59f, 0.98f, 1.0f);  // Material Blue
-  ImVec4 accent_hover = ImVec4(0.35f, 0.66f, 1.0f, 1.0f);
-  ImVec4 accent_active = ImVec4(0.20f, 0.50f, 0.90f, 1.0f);
-  
-  // Status colors
-  ImVec4 color_success = ImVec4(0.2f, 0.8f, 0.2f, 1.0f);  // Green
-  ImVec4 color_warning = ImVec4(1.0f, 0.8f, 0.2f, 1.0f);  // Yellow
-  ImVec4 color_error = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);     // Red
-  ImVec4 color_info = ImVec4(0.2f, 0.6f, 1.0f, 1.0f);       // Blue
-  
+
+  // Core colors - Modern dark theme with subtle cool undertones
+  ImVec4 window_bg = ImVec4(0.11f, 0.12f, 0.14f, 1.0f);      // Darker, subtle blue undertone
+  ImVec4 panel_bg = ImVec4(0.14f, 0.15f, 0.17f, 1.0f);       // Slightly elevated panels
+  ImVec4 input_bg = ImVec4(0.09f, 0.10f, 0.11f, 1.0f);       // Darker inputs - inset look
+  ImVec4 text_color = ImVec4(0.92f, 0.93f, 0.95f, 1.0f);     // Slightly off-white - easier on eyes
+  ImVec4 text_disabled = ImVec4(0.45f, 0.47f, 0.50f, 1.0f);  // Subtle disabled state
+  ImVec4 border_color = ImVec4(0.22f, 0.24f, 0.28f, 0.60f);  // Subtle borders when needed
+
+  // Accent colors - Modern muted blue (less saturated, more refined)
+  ImVec4 accent_primary = ImVec4(0.35f, 0.55f, 0.85f, 1.0f);   // Softer blue
+  ImVec4 accent_hover = ImVec4(0.45f, 0.62f, 0.90f, 1.0f);     // Lighter on hover
+  ImVec4 accent_active = ImVec4(0.30f, 0.48f, 0.78f, 1.0f);    // Darker when pressed
+
+  // Status colors - More refined, less saturated
+  ImVec4 color_success = ImVec4(0.30f, 0.72f, 0.45f, 1.0f);   // Teal-green
+  ImVec4 color_warning = ImVec4(0.95f, 0.75f, 0.30f, 1.0f);   // Warm amber
+  ImVec4 color_error = ImVec4(0.90f, 0.35f, 0.35f, 1.0f);     // Softer red
+  ImVec4 color_info = ImVec4(0.40f, 0.65f, 0.95f, 1.0f);      // Sky blue
+
   // Visualization colors
-  ImVec4 grid_color = ImVec4(0.86f, 0.88f, 0.92f, 0.9f);
-  ImVec4 axis_label_color = ImVec4(0.86f, 0.88f, 0.92f, 0.9f);
-  ImVec4 splitter_color = ImVec4(0.37f, 0.39f, 0.47f, 0.71f);
-  ImVec4 clear_color = ImVec4(0.05f, 0.06f, 0.07f, 1.0f);
-  
+  ImVec4 grid_color = ImVec4(0.70f, 0.72f, 0.78f, 0.7f);      // Softer grid
+  ImVec4 axis_label_color = ImVec4(0.75f, 0.77f, 0.82f, 0.85f);
+  ImVec4 splitter_color = ImVec4(0.20f, 0.22f, 0.26f, 0.80f); // Subtle splitters
+  ImVec4 clear_color = ImVec4(0.08f, 0.09f, 0.10f, 1.0f);     // Near-black background
+
   // LaTeX colors
-  ImVec4 latex_text = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-  ImVec4 latex_bg = ImVec4(0.2f, 0.24f, 0.28f, 1.0f);
+  ImVec4 latex_text = ImVec4(0.95f, 0.96f, 0.97f, 1.0f);
+  ImVec4 latex_bg = ImVec4(0.16f, 0.18f, 0.21f, 1.0f);
+
+  // New: Hover/selection colors for better feedback
+  ImVec4 hover_bg = ImVec4(0.18f, 0.20f, 0.24f, 1.0f);        // Subtle hover highlight
+  ImVec4 selection_bg = ImVec4(0.25f, 0.38f, 0.58f, 0.45f);   // Selection highlight
 };
 
 struct Preferences {

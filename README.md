@@ -20,7 +20,9 @@ This repository contains a C++ solver for a strict subset of 2D/3D PDEs written 
   - `solver/`: Solver integration and thread management
   - `models/`: Data models (application state)
 - `third_party/`: External dependencies (Dear ImGui, GLFW, stb_image)
-- `tools/`: LaTeX preview renderer for the GUI (Python)
+- `tools/`: Offline helpers (`render_latex.py` deprecated; use in-process GUI preview)
+- `docs/reference/LATEX_TOKEN_REGISTRY.md`: Supported LaTeX tokens (generated catalog)
+- `docs/reference/LATEX_PREVIEW_ARCHITECTURE.md`: In-process LaTeX preview pipeline
 - `build/`: CMake build outputs (generated)
 
 For detailed file-level documentation, see `PROJECT_DOCS.md`. For an overview of
@@ -28,12 +30,17 @@ the module boundaries, see `ARCHITECTURE.md`.
 
 ## Implementation Status
 
-This is currently a work in progress. The following are in the process of implemenetation:
-1. Metal/CUDA-accelerated time-step solutions for time-dependent PDEs
-2. Mixed partial derivative PDE term support - u_xy, u_yyx, etc
-3. Fixing metadata on PDE plot output saves
-4. Expanded GUI customization including panel spacing and width, and tab customizability
-   
+Active planning lives in [`docs/planning/MASTER_ROADMAP.md`](docs/planning/MASTER_ROADMAP.md).
+Current focus areas:
+
+1. **Option 1 completion** — coefficient file input, stencil builder, biharmonic, validation suite
+2. **Nonlinear derivative terms** — parsed but not yet solved (`u u_x`, `|\nabla u|^2`)
+3. **GPU parity (Phase 7.1)** — CUDA/Metal catch-up for 2D diffusion and time-dependent cases
+4. **Docking UI** — implemented behind a feature flag; not yet the default layout
+5. **Documentation sync** — README/backend docs aligned with CPU mixed/higher-order support
+
+See the roadmap for ordered work packages and acceptance criteria.
+
 ## BUILDING INSTRUCTIONS - FOLLOW CAREFULLY
 
 Navigate to be in the pde_solver directory and run the following in terminal
@@ -82,6 +89,9 @@ Options:
 - `--domain` `xmin,xmax,ymin,ymax[,zmin,zmax]`.
 - `--grid` `nx,ny[,nz]` (grid resolution).
 - `--bc` boundary specification string; unspecified sides default to `dirichlet:0`.
+  Hyperbolic FV also supports `inflow:<value>`, `outflow`, and `transmissive` face types.
+- `--discretization` `fd|fv` (finite difference or finite volume for conservation laws).
+- `--stability-check` parse/classify and report CFL/backend compatibility (use with `--validate` or a full run).
 - `--shape` or `--domain-shape` implicit domain function `f(x,y[,z]) <= 0`.
 - `--shape-file` load implicit domain expression from a file.
 - `--shape-mask` load a VTK mask for implicit domains (sampled scalar field).

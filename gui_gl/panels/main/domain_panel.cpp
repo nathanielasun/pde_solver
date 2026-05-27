@@ -2,6 +2,8 @@
 #include "imgui.h"
 #include "imgui_stdlib.h"
 #include "app_helpers.h"
+#include "latex/latex_preview_draw.h"
+#include "latex/latex_render_service.h"
 #include "validation.h"
 #include "systems/coordinate_system_registry.h"
 #include "systems/command_history.h"
@@ -509,6 +511,7 @@ void RenderImplicitShapeSection(DomainPanelState& state) {
                                                     "Change domain shape");
       state.cmd_history->Execute(std::move(cmd));
     }
+    state.shape_preview.dirty = true;
   }
   
   std::string shape_prefix;
@@ -529,12 +532,19 @@ void RenderImplicitShapeSection(DomainPanelState& state) {
   }
   const std::string shape_latex =
       state.domain_shape.empty() ? std::string() : shape_prefix + state.domain_shape;
-  UpdateLatexTexture(state.shape_preview, shape_latex, state.python_path,
-                     state.script_path, state.cache_dir, state.latex_color,
-                     state.latex_font_size);
-  if (!state.shape_preview.error.empty()) {
-    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "%s", state.shape_preview.error.c_str());
-  } else if (state.shape_preview.texture != 0) {
+  if (shape_latex != state.shape_preview.source) {
+    state.shape_preview.dirty = true;
+  }
+  if (state.shape_preview.dirty || state.shape_preview.pending ||
+      state.shape_preview.texture == 0) {
+    UpdateLatexTexture(state.shape_preview, shape_latex, state.latex_color,
+                       state.latex_font_size);
+  }
+  if (state.shape_preview.pending) {
+    ImGui::TextColored(ImVec4(0.7f, 0.75f, 0.85f, 1.0f), "Rendering preview...");
+  } else if (!state.shape_preview.error.empty() || state.shape_preview.texture == 0) {
+    DrawLatexPreviewError(state.shape_preview, std::string(), true, state.input_width);
+  } else {
     DrawLatexPreview(state.shape_preview, state.input_width, 110.0f);
   }
   if (has_mask) {

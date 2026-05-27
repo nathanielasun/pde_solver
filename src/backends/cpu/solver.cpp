@@ -20,7 +20,10 @@
 #include "safe_math.h"
 #include "solvers/krylov.h"
 #include "solvers/multigrid.h"
+#include "nonlinear_derivatives.h"
+#include "nonlinear_solve.h"
 #include "solvers/relaxation.h"
+#include "time_integrator.h"
 
 SolveOutput SolvePDE3D(const SolveInput& input, const ProgressCallback& progress);
 SolveOutput SolvePDETimeSeries(const SolveInput& input, const FrameCallback& on_frame, const ProgressCallback& progress);
@@ -610,8 +613,11 @@ SolveOutput SolvePDE3D(const SolveInput& input, const ProgressCallback& progress
   if (d.coord_system != CoordinateSystem::Cartesian) {
     return {"3D solver supports Cartesian coordinates only", {}};
   }
-  if (!input.nonlinear_derivatives.empty()) {
-    return {"3D solver does not support nonlinear derivative terms", {}};
+  if (!input.nonlinear_derivatives.empty() &&
+      input.solver.method != SolveMethod::Jacobi &&
+      input.solver.method != SolveMethod::GaussSeidel &&
+      input.solver.method != SolveMethod::SOR) {
+    return {"3D solver supports nonlinear derivative terms only with Jacobi/Gauss-Seidel/SOR", {}};
   }
   if (input.solver.method != SolveMethod::Jacobi &&
       input.solver.method != SolveMethod::GaussSeidel &&
@@ -734,6 +740,7 @@ SolveOutput SolvePDE3D(const SolveInput& input, const ProgressCallback& progress
   const int max_iter = std::max(1, input.solver.max_iter);
   const bool has_integrals = !input.integrals.empty();
   const bool has_nonlinear = !input.nonlinear.empty();
+  const bool has_nonlinear_deriv = !input.nonlinear_derivatives.empty();
 
   auto emit_progress = [&](const std::string& phase, double value) {
     if (progress) {
@@ -876,6 +883,11 @@ SolveOutput SolvePDE3D(const SolveInput& input, const ProgressCallback& progress
               has_integrals && weights_ptr ? (*weights_ptr)[static_cast<size_t>(idx)] * integral_value : 0.0;
           const double nonlinear_term =
               has_nonlinear ? EvalNonlinear(input.nonlinear, old_u) : 0.0;
+          const double nonlinear_deriv_term =
+              has_nonlinear_deriv
+                  ? AccumulateNonlinearDerivatives3D(input.nonlinear_derivatives, grid, i, j, k, nx,
+                                                     ny, nz, dx, dy, dz)
+                  : 0.0;
 
           const double laplacian_contrib =
               (ax + cx) * u_right +
@@ -933,7 +945,7 @@ SolveOutput SolvePDE3D(const SolveInput& input, const ProgressCallback& progress
             fourth_contrib += az4_val * (u_zzzz - c4z * old_u);
           }
 
-          const double rhs = -(f_val + integral_term + nonlinear_term) -
+          const double rhs = -(f_val + integral_term + nonlinear_term + nonlinear_deriv_term) -
                              (laplacian_contrib + mixed_contrib + third_contrib + fourth_contrib);
           const double jacobi_update = rhs / center;
           if (input.solver.method == SolveMethod::Jacobi) {
@@ -975,6 +987,10 @@ SolveOutput SolvePDE3D(const SolveInput& input, const ProgressCallback& progress
 }
 
 SolveOutput SolvePDETimeSeries(const SolveInput& input, const FrameCallback& on_frame, const ProgressCallback& progress) {
+  if (ShouldUseConservationSolver(input)) {
+    return SolveConservationLawTimeSeries(input, on_frame, progress);
+  }
+
   const Domain& d = input.domain;
 
   // Validate grid dimensions first
@@ -986,10 +1002,6 @@ SolveOutput SolvePDETimeSeries(const SolveInput& input, const FrameCallback& on_
   if (d.nz > 1) {
     return SolvePDETimeSeries3D(input, on_frame, progress);
   }
-  if (!input.nonlinear_derivatives.empty()) {
-    return {"time-dependent solver does not support nonlinear derivative terms", {}};
-  }
-
   const int nx = d.nx;
   const int ny = d.ny;
 
@@ -1014,17 +1026,6 @@ SolveOutput SolvePDETimeSeries(const SolveInput& input, const FrameCallback& on_
   const bool has_utt = std::abs(input.pde.utt) > 1e-12;
   if (!has_ut && !has_utt) {
     return {"time-dependent solve requires u_t or u_tt term", {}};
-  }
-
-  // CFL stability check for explicit time stepping
-  // For diffusion: dt < C * min(dx,dy)^2 / max_diffusion_coeff
-  // For advection: dt < C * min(dx,dy) / max_advection_coeff
-  const double max_diffusion = std::max(std::abs(input.pde.a), std::abs(input.pde.b));
-  const double max_advection = std::max(std::abs(input.pde.c), std::abs(input.pde.d));
-  auto cfl_check = pde::CheckCFL(dt, dx, dy, 0.0, max_diffusion, max_advection, 0.5);
-  if (!cfl_check.stable && progress) {
-    // Warn but don't fail - let user proceed at their own risk
-    progress("cfl_warning", cfl_check.max_dt);
   }
 
   std::vector<unsigned char> active;
@@ -1110,6 +1111,20 @@ SolveOutput SolvePDETimeSeries(const SolveInput& input, const FrameCallback& on_
     return {"checkpoint restart for u_tt requires velocity data", {}};
   }
 
+  // CFL stability check for explicit time stepping
+  const double max_diffusion = std::max(std::abs(input.pde.a), std::abs(input.pde.b));
+  double max_advection = std::max(std::abs(input.pde.c), std::abs(input.pde.d));
+  if (!input.nonlinear_derivatives.empty()) {
+    max_advection = std::max(
+        max_advection,
+        EstimateNonlinearAdvectionSpeed(input.nonlinear_derivatives, grid, nx, ny, active_ptr));
+  }
+  auto cfl_check = pde::CheckCFL(dt, dx, dy, 0.0, max_diffusion, max_advection, 0.5);
+  if (!cfl_check.stable && progress) {
+    progress("cfl_warning", cfl_check.max_dt);
+  }
+
+  const bool has_nonlinear_deriv = !input.nonlinear_derivatives.empty();
   double t = t_start;
   ApplyDirichletCPU(input, d, dx, dy, &grid, is_active, t);
   ApplyNeumannRobinCPU(input, d, dx, dy, &grid, is_active, t);
@@ -1128,6 +1143,102 @@ SolveOutput SolvePDETimeSeries(const SolveInput& input, const FrameCallback& on_
 #endif
     progress("solve_total", static_cast<double>(frames));
     progress("time", 0.0);
+  }
+
+  const bool has_diffusion =
+      std::abs(input.pde.a) > 1e-14 || std::abs(input.pde.b) > 1e-14;
+  const bool use_integrator =
+      !has_utt && input.time.integrator != TimeIntegrator::ForwardEuler;
+
+  auto compute_cell_rhs = [&](const std::vector<double>& state, int i, int j, double t_eval,
+                              bool include_diffusion) -> double {
+    const int idx = Index(i, j, nx);
+    const double x = d.xmin + i * dx;
+    const double y = d.ymin + j * dy;
+    double rhs = op_values[static_cast<size_t>(idx)] + eval_rhs(x, y, t_eval) +
+                 (has_nonlinear ? EvalNonlinear(input.nonlinear, state[static_cast<size_t>(idx)]) : 0.0) +
+                 (has_nonlinear_deriv ? AccumulateNonlinearDerivatives(input.nonlinear_derivatives, state, i, j,
+                                                                       nx, ny, dx, dy)
+                                      : 0.0);
+    if (!include_diffusion && has_diffusion) {
+      double laplacian = 0.0;
+      if (i > 0 && i < nx - 1) {
+        laplacian += input.pde.a *
+                     (state[static_cast<size_t>(Index(i + 1, j, nx))] - 2.0 * state[static_cast<size_t>(idx)] +
+                      state[static_cast<size_t>(Index(i - 1, j, nx))]) /
+                     (dx * dx);
+      }
+      if (j > 0 && j < ny - 1) {
+        laplacian += input.pde.b *
+                     (state[static_cast<size_t>(Index(i, j + 1, nx))] - 2.0 * state[static_cast<size_t>(idx)] +
+                      state[static_cast<size_t>(Index(i, j - 1, nx))]) /
+                     (dy * dy);
+      }
+      rhs -= laplacian;
+    }
+    return rhs;
+  };
+
+  auto fill_dudt = [&](double t_eval, const std::vector<double>& state, std::vector<double>* dudt) {
+    dudt->assign(state.size(), 0.0);
+    op.Apply(state, &op_values);
+    for (int j = 1; j < ny - 1; ++j) {
+      for (int i = 1; i < nx - 1; ++i) {
+        if (!is_active(i, j)) {
+          continue;
+        }
+        const int idx = Index(i, j, nx);
+        const double rhs = compute_cell_rhs(state, i, j, t_eval, true);
+        (*dudt)[static_cast<size_t>(idx)] = pde::SafeDivClamped(-rhs, input.pde.ut, 0.0);
+      }
+    }
+  };
+
+  RHSFunction rhs_explicit;
+  RHSFunction rhs_implicit;
+  if (use_integrator && input.time.integrator == TimeIntegrator::IMEX && has_diffusion) {
+    rhs_explicit = [&](double t_eval, const std::vector<double>& state, std::vector<double>* dudt) {
+      dudt->assign(state.size(), 0.0);
+      op.Apply(state, &op_values);
+      for (int j = 1; j < ny - 1; ++j) {
+        for (int i = 1; i < nx - 1; ++i) {
+          if (!is_active(i, j)) {
+            continue;
+          }
+          const int idx = Index(i, j, nx);
+          const double rhs = compute_cell_rhs(state, i, j, t_eval, false);
+          (*dudt)[static_cast<size_t>(idx)] = pde::SafeDivClamped(-rhs, input.pde.ut, 0.0);
+        }
+      }
+    };
+    rhs_implicit = [&](double t_eval, const std::vector<double>& state, std::vector<double>* dudt) {
+      (void)t_eval;
+      dudt->assign(state.size(), 0.0);
+      for (int j = 1; j < ny - 1; ++j) {
+        for (int i = 1; i < nx - 1; ++i) {
+          if (!is_active(i, j)) {
+            continue;
+          }
+          const int idx = Index(i, j, nx);
+          double laplacian = 0.0;
+          if (i > 0 && i < nx - 1) {
+            laplacian += input.pde.a *
+                         (state[static_cast<size_t>(Index(i + 1, j, nx))] -
+                          2.0 * state[static_cast<size_t>(idx)] +
+                          state[static_cast<size_t>(Index(i - 1, j, nx))]) /
+                         (dx * dx);
+          }
+          if (j > 0 && j < ny - 1) {
+            laplacian += input.pde.b *
+                         (state[static_cast<size_t>(Index(i, j + 1, nx))] -
+                          2.0 * state[static_cast<size_t>(idx)] +
+                          state[static_cast<size_t>(Index(i, j - 1, nx))]) /
+                         (dy * dy);
+          }
+          (*dudt)[static_cast<size_t>(idx)] = pde::SafeDivClamped(-laplacian, input.pde.ut, 0.0);
+        }
+      }
+    };
   }
 
   for (int frame = 0; frame < frames; ++frame) {
@@ -1151,45 +1262,65 @@ SolveOutput SolvePDETimeSeries(const SolveInput& input, const FrameCallback& on_
       break;
     }
 
-    op.Apply(grid, &op_values);
-    next = grid;
     const double t_next = t + dt;
+    if (use_integrator) {
+      TimeIntegratorConfig tic;
+      tic.method = input.time.integrator;
+      tic.implicit_max_iter = 50;
+      tic.implicit_tol = 1e-8;
+      TimeStepResult step_result;
+      if (input.time.integrator == TimeIntegrator::IMEX && has_diffusion) {
+        tic.rhs_explicit = rhs_explicit;
+        tic.rhs_implicit = rhs_implicit;
+        step_result = TimeStep(grid, t, dt, fill_dudt, tic);
+      } else {
+        step_result = TimeStep(grid, t, dt, fill_dudt, tic);
+      }
+      if (!step_result.success) {
+        return {step_result.error.empty() ? "time integration failed" : step_result.error, {}};
+      }
+    } else {
+      op.Apply(grid, &op_values);
+      next = grid;
 #ifdef _OPENMP
-    #pragma omp parallel for schedule(static)
+      #pragma omp parallel for schedule(static)
 #endif
-    for (int j = 1; j < ny - 1; ++j) {
-      const double y = d.ymin + j * dy;
-      for (int i = 1; i < nx - 1; ++i) {
-        if (!is_active(i, j)) {
-          next[static_cast<size_t>(Index(i, j, nx))] = 0.0;
-          if (has_utt) {
-            velocity[static_cast<size_t>(Index(i, j, nx))] = 0.0;
+      for (int j = 1; j < ny - 1; ++j) {
+        const double y = d.ymin + j * dy;
+        for (int i = 1; i < nx - 1; ++i) {
+          if (!is_active(i, j)) {
+            next[static_cast<size_t>(Index(i, j, nx))] = 0.0;
+            if (has_utt) {
+              velocity[static_cast<size_t>(Index(i, j, nx))] = 0.0;
+            }
+            continue;
           }
-          continue;
-        }
-        const int idx = Index(i, j, nx);
-        const double x = d.xmin + i * dx;
-        const double rhs = op_values[static_cast<size_t>(idx)] +
-                           eval_rhs(x, y, t) +
-                           (has_nonlinear ? EvalNonlinear(input.nonlinear, grid[static_cast<size_t>(idx)]) : 0.0);
-        if (has_utt) {
-          // Safe division for acceleration calculation
-          const double numer = -(rhs + input.pde.ut * velocity[static_cast<size_t>(idx)]);
-          const double accel = pde::SafeDivClamped(numer, input.pde.utt, 0.0);
-          velocity[static_cast<size_t>(idx)] += dt * accel;
-          next[static_cast<size_t>(idx)] = grid[static_cast<size_t>(idx)] + dt * velocity[static_cast<size_t>(idx)];
-        } else {
-          // Safe division for time derivative calculation
-          const double u_t = pde::SafeDivClamped(-rhs, input.pde.ut, 0.0);
-          next[static_cast<size_t>(idx)] = grid[static_cast<size_t>(idx)] + dt * u_t;
+          const int idx = Index(i, j, nx);
+          const double x = d.xmin + i * dx;
+          const double rhs = op_values[static_cast<size_t>(idx)] +
+                             eval_rhs(x, y, t) +
+                             (has_nonlinear ? EvalNonlinear(input.nonlinear, grid[static_cast<size_t>(idx)]) : 0.0) +
+                             (has_nonlinear_deriv
+                                  ? AccumulateNonlinearDerivatives(input.nonlinear_derivatives, grid, i, j, nx,
+                                                                   ny, dx, dy)
+                                  : 0.0);
+          if (has_utt) {
+            const double numer = -(rhs + input.pde.ut * velocity[static_cast<size_t>(idx)]);
+            const double accel = pde::SafeDivClamped(numer, input.pde.utt, 0.0);
+            velocity[static_cast<size_t>(idx)] += dt * accel;
+            next[static_cast<size_t>(idx)] = grid[static_cast<size_t>(idx)] + dt * velocity[static_cast<size_t>(idx)];
+          } else {
+            const double u_t = pde::SafeDivClamped(-rhs, input.pde.ut, 0.0);
+            next[static_cast<size_t>(idx)] = grid[static_cast<size_t>(idx)] + dt * u_t;
+          }
         }
       }
+      grid.swap(next);
     }
 
-    ApplyNeumannRobinCPU(input, d, dx, dy, &next, is_active, t_next);
-    ApplyDirichletCPU(input, d, dx, dy, &next, is_active, t_next);
-    apply_embedded(&next);
-    grid.swap(next);
+    ApplyNeumannRobinCPU(input, d, dx, dy, &grid, is_active, t_next);
+    ApplyDirichletCPU(input, d, dx, dy, &grid, is_active, t_next);
+    apply_embedded(&grid);
   }
 
   SolveOutput out;

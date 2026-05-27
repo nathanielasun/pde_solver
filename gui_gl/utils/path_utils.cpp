@@ -83,3 +83,30 @@ std::filesystem::path ResolvePrefsPath(const std::filesystem::path& exec_path) {
   }
   return std::filesystem::current_path() / "pde_gui_prefs.ini";
 }
+
+std::filesystem::path FindMicroTeXResDir(const std::filesystem::path& exec_path) {
+  std::vector<std::filesystem::path> roots;
+  if (!exec_path.empty()) {
+    roots.push_back(exec_path.parent_path());
+  }
+  roots.push_back(std::filesystem::current_path());
+
+  for (const auto& base : roots) {
+    const std::filesystem::path bundled = base / "res";
+    if (std::filesystem::exists(bundled / "fonts")) {
+      return bundled;
+    }
+    std::filesystem::path cur = base;
+    for (int i = 0; i < 6; ++i) {
+      const std::filesystem::path dev = cur / "third_party" / "MicroTeX" / "res";
+      if (std::filesystem::exists(dev / "fonts")) {
+        return dev;
+      }
+      if (!cur.has_parent_path()) {
+        break;
+      }
+      cur = cur.parent_path();
+    }
+  }
+  return {};
+}

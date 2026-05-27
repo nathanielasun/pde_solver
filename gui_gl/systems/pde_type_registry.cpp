@@ -1,4 +1,5 @@
 #include "pde_type_registry.h"
+#include "residual_operator.h"
 #include <algorithm>
 #include <cmath>
 
@@ -248,7 +249,19 @@ void PDETypeRegistry::InitializeBuiltInTypes() {
     bool has_nonlinear_deriv = !result.nonlinear_derivatives.empty();
     return has_time && has_laplacian && has_nonlinear_deriv;
   };
-  burgers.input_builder = poisson.input_builder;
+  burgers.input_builder = [](const LatexParseResult& result) {
+    SolveInput input;
+    input.pde = result.coeffs;
+    input.integrals = result.integrals;
+    input.nonlinear = result.nonlinear;
+    input.nonlinear_derivatives = result.nonlinear_derivatives;
+    ApplyClassificationToInput(ClassifyProblem(result), &input);
+    input.discretization = Discretization::FiniteVolume;
+    input.conservation.flux_latex = "0.5*u^2";
+    input.conservation.riemann = ConservationLawConfig::RiemannSolver::HLL;
+    input.time.integrator = TimeIntegrator::SSPRK3;
+    return input;
+  };
   burgers.default_bcs = {
     {"left", "u=1"},
     {"right", "u=0"},

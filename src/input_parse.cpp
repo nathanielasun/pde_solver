@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <sstream>
 
 #include "expression_eval.h"
@@ -55,6 +56,18 @@ bool ParseBoundaryKind(const std::string& text, BCKind* kind) {
   }
   if (text == "robin") {
     *kind = BCKind::Robin;
+    return true;
+  }
+  if (text == "inflow") {
+    *kind = BCKind::Inflow;
+    return true;
+  }
+  if (text == "outflow") {
+    *kind = BCKind::Outflow;
+    return true;
+  }
+  if (text == "transmissive") {
+    *kind = BCKind::Transmissive;
     return true;
   }
   return false;
@@ -518,6 +531,44 @@ class ExprParser {
   }
 };
 
+// Check if expression contains function calls or power operators (non-linear)
+static bool ContainsNonLinearTerms(const std::string& infix) {
+  // List of function names that make an expression non-linear
+  static const char* functions[] = {
+    "sin", "cos", "tan", "sinh", "cosh", "tanh",
+    "asin", "acos", "atan", "atan2",
+    "exp", "log", "sqrt", "abs",
+    "floor", "ceil", "round", "sign", "sgn", "erf",
+    "min", "max", "pow", "pi", "e"
+  };
+
+  std::string lower = infix;
+  for (char& c : lower) {
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
+
+  // Check for power operator
+  if (lower.find('^') != std::string::npos) {
+    return true;
+  }
+
+  // Check for function names
+  for (const char* func : functions) {
+    size_t pos = lower.find(func);
+    if (pos != std::string::npos) {
+      // Make sure it's not part of a larger identifier
+      bool valid_start = (pos == 0 || !std::isalpha(static_cast<unsigned char>(lower[pos - 1])));
+      size_t end_pos = pos + std::strlen(func);
+      bool valid_end = (end_pos >= lower.size() || !std::isalpha(static_cast<unsigned char>(lower[end_pos])));
+      if (valid_start && valid_end) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 bool ParseLinearExpr(const std::string& text, BoundaryCondition::Expression* expr,
                      std::string* error) {
   *expr = {};
@@ -543,9 +594,36 @@ bool ParseLinearExpr(const std::string& text, BoundaryCondition::Expression* exp
     return false;
   }
 
+  // Check if expression contains non-linear terms (functions, powers)
+  // If so, validate with ExpressionEvaluator and store as latex
+  if (ContainsNonLinearTerms(infix)) {
+    ExpressionEvaluator evaluator = ExpressionEvaluator::ParseLatex(text);
+    if (!evaluator.ok()) {
+      if (error) {
+        *error = evaluator.error();
+      }
+      return false;
+    }
+    // Store the original expression in latex field for runtime evaluation
+    expr->latex = text;
+    // Set linear coefficients to zero (they won't be used)
+    expr->constant = 0.0;
+    expr->x = 0.0;
+    expr->y = 0.0;
+    expr->z = 0.0;
+    return true;
+  }
+
+  // Try to parse as linear expression
   std::string token_error;
   std::vector<Token> tokens = Tokenize(infix, &token_error);
   if (!token_error.empty()) {
+    // If tokenization fails, try as general expression
+    ExpressionEvaluator evaluator = ExpressionEvaluator::ParseLatex(text);
+    if (evaluator.ok()) {
+      expr->latex = text;
+      return true;
+    }
     if (error) {
       *error = token_error;
     }
@@ -556,6 +634,12 @@ bool ParseLinearExpr(const std::string& text, BoundaryCondition::Expression* exp
   ExprParser parser(tokens);
   std::string parse_error;
   if (!parser.Parse(&result, &parse_error)) {
+    // If linear parsing fails, try as general expression
+    ExpressionEvaluator evaluator = ExpressionEvaluator::ParseLatex(text);
+    if (evaluator.ok()) {
+      expr->latex = text;
+      return true;
+    }
     if (error) {
       *error = parse_error;
     }
